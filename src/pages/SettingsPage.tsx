@@ -362,6 +362,15 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
             The file that teaches Selah English. Selah never downloads it for
             you — point at one you already have.
           </p>
+          {settings.speech.recognizer === "whisper" &&
+          state &&
+          !state.modelLoaded ? (
+            <p className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
+              This file could not be opened, so words are not being written down
+              yet. Check the whole path is written out and the file is really
+              there.
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-1.5">

@@ -142,11 +142,31 @@ pnpm install
 pnpm tauri dev
 ```
 
-- To enable real speech recognition using whisper.cpp, build with the whisper feature:
+- To enable real speech recognition using whisper.cpp, **three** things are needed. The build feature alone is not enough — Selah also needs a model, and the recognizer must be switched on in Settings:
+
+1. Install the C++ build tooling (whisper.cpp is compiled from source):
+
+```bash
+brew install cmake
+```
+
+2. Build with the `whisper` feature:
 
 ```bash
 pnpm tauri dev -- --features whisper
 ```
+
+3. Put a model file on disk and point Settings at it. Selah never downloads models itself:
+
+```bash
+# The model can live anywhere; the app data directory is the documented default.
+cp ~/Downloads/ggml-base.en.bin \
+   "$HOME/Library/Application Support/app.selah.desktop/models/whisper/"
+```
+
+Then open **Settings → Microphone**, set **Speech recognizer** to *whisper*, and paste the **full path** to the model file. Relative paths are resolved against the process working directory, so prefer an absolute path.
+
+If any of the three is missing, Selah still runs — it just reports *"Voice model ready: no"* on the Live screen and returns no words.
 
 ## Usage
 
