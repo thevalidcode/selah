@@ -55,8 +55,8 @@ impl SpeechRecognizer for WhisperRecognizer {
         }
 
         let mut params = WhisperContextParameters::default();
-        params.set_use_gpu(false); // CPU inference: keeps Intel macs happy
-        params.set_flash_attn(false);
+        params.use_gpu(false); // CPU inference: keeps Intel macs happy
+        params.flash_attn(false);
 
         let context = WhisperContext::new_with_params(model_path, params)
             .map_err(|e| AppError::SpeechRecognitionFailed(e.to_string()))?;
@@ -96,7 +96,7 @@ impl SpeechRecognizer for WhisperRecognizer {
         let mut segments = Vec::with_capacity(n.max(0) as usize);
         let mut parts = Vec::new();
         for i in 0..n {
-            let Ok(segment) = state.get_segment(i) else {
+            let Some(segment) = state.get_segment(i) else {
                 continue;
             };
             let text = segment.to_str_lossy().unwrap_or_default().to_string();

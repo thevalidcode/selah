@@ -44,6 +44,22 @@ pub struct SpeechSettings {
     pub speech_sample_rate: u32,
 }
 
+impl Default for SpeechSettings {
+    fn default() -> Self {
+        Self {
+            // The mock recognizer needs no model, so it is the safe default.
+            recognizer: RecognizerKind::Mock,
+            model_path: None,
+            language: None,
+            threads: std::thread::available_parallelism()
+                .map(|n| n.get() as u32)
+                .unwrap_or(4),
+            vad_enabled: true,
+            speech_sample_rate: 16_000,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PresentationSettings {

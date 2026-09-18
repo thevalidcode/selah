@@ -58,11 +58,25 @@ impl AppState {
         let vad = Box::new(EnergyVad::default()) as Box<dyn crate::speech::VoiceActivityDetector>;
 
         // Load the configured whisper model up-front when asked for it.
+        //
+        // A missing or unreadable model file must NOT stop the app from
+        // starting: a hard failure here would leave the operator with no way to
+        // correct the path from Settings. Instead, log the problem and start
+        // with the model unloaded — the UI then reports "voice model ready: no"
+        // and a corrected path is picked up by `SpeechManager::reconfigure`
+        // the next time settings are saved.
         let mut recognizer = recognizer;
         if recognizer_kind == crate::models::settings::RecognizerKind::Whisper {
             if let Some(model) = settings.speech.model_path.clone() {
                 if !model.is_empty() {
-                    recognizer.load_model(&model)?;
+                    if let Err(err) = recognizer.load_model(&model) {
+                        tracing::warn!(
+                            model = %model,
+                            error = %err,
+                            "speech model did not load; Selah starts without speech-to-text \
+                             until the model path in Settings is corrected"
+                        );
+                    }
                 }
             }
         }
