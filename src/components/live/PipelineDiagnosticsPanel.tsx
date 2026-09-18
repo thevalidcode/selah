@@ -35,7 +35,8 @@ export default function PipelineDiagnosticsPanel({
               items={[
                 {
                   label: "Listening for words",
-                  value: speechState.recognizerId === "whisper" ? "yes" : "no",
+                  value:
+                    speechState.recognizerId === "moonshine" ? "yes" : "no",
                 },
                 {
                   label: "Voice model ready",

@@ -45,6 +45,23 @@ pub fn run() {
             logging::init(&paths.logs_dir);
             tracing::info!("selah starting");
 
+            // Speech-to-text runs on ONNX Runtime. Resolve the shared library
+            // once, up-front, so a missing runtime is reported clearly at
+            // start-up instead of as an opaque failure on first transcription.
+            #[cfg(feature = "moonshine")]
+            {
+                let resource_dir = app.path().resource_dir().ok();
+                match crate::speech::moonshine::runtime::ensure_available(resource_dir.as_deref()) {
+                    Ok(path) => {
+                        tracing::info!(runtime = %path.display(), "ONNX Runtime ready")
+                    }
+                    Err(err) => tracing::warn!(
+                        error = %err,
+                        "ONNX Runtime unavailable; speech-to-text will remain off"
+                    ),
+                }
+            }
+
             let state = AppState::init_with_paths(app.handle(), paths)?;
             app.manage(state);
 

@@ -51,7 +51,7 @@ export interface Transcript {
   text: string;
   segments: TranscriptSegment[];
   /** "mock" transcripts are development placeholders, never real speech. */
-  source: "mock" | "whisper";
+  source: "mock" | "moonshine";
   sampleCount: number;
 }
 
@@ -193,7 +193,7 @@ export interface AppSettings {
     sampleRate: number;
   };
   speech: {
-    recognizer: "mock" | "whisper";
+    recognizer: "mock" | "moonshine";
     modelPath?: string;
     language?: string;
     threads: number;

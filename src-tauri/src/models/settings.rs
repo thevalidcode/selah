@@ -12,8 +12,14 @@ pub enum RecognizerKind {
     /// Development recognizer. Returns empty transcripts — never pretends to
     /// transcribe audio.
     Mock,
-    /// whisper.cpp via whisper-rs (requires the `whisper` cargo feature).
-    Whisper,
+    /// Moonshine (ONNX) through transcribe-rs. Requires the `moonshine`
+    /// cargo feature (on by default) and a model directory at runtime.
+    ///
+    /// `alias` keeps settings written by an earlier build (which named the
+    /// whisper.cpp engine) loading cleanly instead of failing to deserialize
+    /// and blocking application start-up.
+    #[serde(alias = "whisper")]
+    Moonshine,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -40,7 +46,7 @@ pub struct SpeechSettings {
     pub language: Option<String>,
     pub threads: u32,
     pub vad_enabled: bool,
-    /// The expected/speech sample rate after resampling (whisper wants 16k).
+    /// The expected/speech sample rate after resampling (Moonshine wants 16k).
     pub speech_sample_rate: u32,
 }
 
@@ -68,6 +74,57 @@ pub struct PresentationSettings {
     pub background: String,
     pub font_size: u32,
     pub follow_live: bool,
+}
+
+impl Default for PresentationSettings {
+    fn default() -> Self {
+        Self {
+            display_index: None,
+            fullscreen: true,
+            background: "#000000".to_string(),
+            font_size: 64,
+            follow_live: true,
+        }
+    }
+}
+
+impl PresentationSettings {
+    /// Repairs values that would break the projector window.
+    ///
+    /// Settings are a free-form JSON document, so a hand-edited or partially
+    /// written file can contain a malformed background colour (for example
+    /// `#06666`) or a font size small enough to be unreadable from the back of
+    /// a room. Rather than silently render a black-on-black or hair-thin
+    /// service, clamp those two fields back into a safe range and report
+    /// whether anything was changed.
+    pub fn sanitized(&self) -> (Self, bool) {
+        let mut fixed = self.clone();
+        let mut changed = false;
+
+        if !is_valid_hex_color(&self.background) {
+            fixed.background = Self::default().background;
+            changed = true;
+        }
+        if !(MIN_FONT_SIZE..=MAX_FONT_SIZE).contains(&self.font_size) {
+            fixed.font_size = Self::default().font_size;
+            changed = true;
+        }
+
+        (fixed, changed)
+    }
+}
+
+/// Smallest projector font size considered readable (theatre/back-of-room).
+const MIN_FONT_SIZE: u32 = 16;
+/// Largest projector font size; above this a single word fills the screen.
+const MAX_FONT_SIZE: u32 = 200;
+
+/// Whether `value` is a `#RRGGBB` colour literal.
+fn is_valid_hex_color(value: &str) -> bool {
+    let Some(digits) = value.strip_prefix('#') else {
+        return false;
+    };
+    digits.len() == 6 && digits.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -101,13 +158,7 @@ impl Default for AppSettings {
                 vad_enabled: true,
                 speech_sample_rate: 16_000,
             },
-            presentation: PresentationSettings {
-                display_index: None,
-                fullscreen: true,
-                background: "#000000".to_string(),
-                font_size: 64,
-                follow_live: true,
-            },
+            presentation: PresentationSettings::default(),
         }
     }
 }
@@ -136,5 +187,45 @@ mod tests {
         let json = serde_json::to_string(&s).unwrap();
         let back: AppSettings = serde_json::from_str(&json).unwrap();
         assert_eq!(s, back);
+    }
+
+    #[test]
+    fn legacy_whisper_recognizer_loads_as_moonshine() {
+        // Settings written by the previous build named the whisper.cpp engine.
+        // They must load rather than abort start-up.
+        let json = r#"{
+            "speech": { "recognizer": "whisper", "modelPath": null, "language": null,
+                        "threads": 4, "vadEnabled": true, "speechSampleRate": 16000 }
+        }"#;
+        let s: AppSettings = serde_json::from_str(json).unwrap();
+        assert_eq!(s.speech.recognizer, RecognizerKind::Moonshine);
+    }
+
+    #[test]
+    fn sanitize_repairs_malformed_projector_settings() {
+        // Reproduces the truncated values seen in a real settings document:
+        // an invalid 5-digit colour and a font size far too small to read.
+        let broken = PresentationSettings {
+            display_index: None,
+            fullscreen: false,
+            background: "#06666".to_string(),
+            font_size: 10,
+            follow_live: true,
+        };
+        let (fixed, changed) = broken.sanitized();
+        assert!(changed);
+        assert_eq!(fixed.background, "#000000");
+        assert_eq!(fixed.font_size, 64);
+        // Fields that were already valid are left alone.
+        assert!(!fixed.fullscreen);
+        assert!(fixed.follow_live);
+    }
+
+    #[test]
+    fn sanitize_leaves_valid_settings_untouched() {
+        let settings = PresentationSettings::default();
+        let (fixed, changed) = settings.sanitized();
+        assert!(!changed);
+        assert_eq!(fixed, settings);
     }
 }

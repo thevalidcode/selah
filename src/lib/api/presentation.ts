@@ -105,3 +105,27 @@ export function removePresentationItem(
     itemId,
   });
 }
+
+// ------------------------------------------------- showing saved content
+
+/** Shows one saved item on the projector. */
+export function projectSavedItem(itemId: string): Promise<PresentationState> {
+  return command<PresentationState>("project_saved_item", { itemId });
+}
+
+/** Shows a whole saved presentation, starting at its first item. */
+export function projectSavedPresentation(
+  id: string,
+): Promise<PresentationState> {
+  return command<PresentationState>("project_saved_presentation", { id });
+}
+
+/** Moves to the next item in the presentation being shown. */
+export function showNextItem(): Promise<PresentationState> {
+  return command<PresentationState>("show_next_item");
+}
+
+/** Returns to the previous item in the presentation being shown. */
+export function showPreviousItem(): Promise<PresentationState> {
+  return command<PresentationState>("show_previous_item");
+}

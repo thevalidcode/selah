@@ -30,22 +30,31 @@ regex = "1"
 cpal = "0.18"
 chrono = { version = "0.4", features = ["clock"] }
 
-# whisper.cpp bindings. Intel macOS CPU inference is supported by whisper.cpp
-# and compiled through this crate.
+# Moonshine speech-to-text, run directly on ONNX Runtime.
 #
-# This is an OPTIONAL feature and is NOT part of the default build:
-#   * compiling it requires `cmake` (whisper.cpp is a C++ codebase), and
-#   * a model file is required at runtime (never auto-downloaded).
+# Why not a wrapper crate: the widely used wrappers (transcribe-rs,
+# sherpa-onnx) load Moonshine through a *merged* decoder graph that expects a
+# `use_cache_branch` input. The models distributed by Transformers.js /
+# optimum — which is what Selah ships — are the *split* export
+# (`encoder_model`, `decoder_model`, `decoder_with_past_model`, none of which
+# contain `use_cache_branch`). Those graphs cannot be renamed into the merged
+# layout, so Selah drives ONNX Runtime itself and speaks both layouts.
 #
-# Enable it with: `cargo build --features whisper` (after installing cmake).
-# Until then the app runs the real microphone → VAD pipeline and uses the
-# clearly-marked MockSpeechRecognizer for transcription.
-whisper-rs = { version = "0.16", optional = true }
+# `load-dynamic` means ONNX Runtime is not downloaded at build time; the
+# shared library is resolved at start-up (see `speech::moonshine::runtime`).
+ort = { version = "=2.0.0-rc.12", default-features = false, features = [
+    "std",
+    "ndarray",
+    "load-dynamic",
+    "tracing",
+    "api-23",
+], optional = true }
+ndarray = { version = "0.17", optional = true }
 tracing-appender = "0.2.5"
 
 [features]
-default = []
-whisper = ["dep:whisper-rs"]
+default = ["moonshine"]
+moonshine = ["dep:ort", "dep:ndarray"]
 
 [profile.release]
 # Small, predictable binaries for a presentation machine.

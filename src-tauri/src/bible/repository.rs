@@ -465,6 +465,27 @@ impl<'a> PresentationRepository<'a> {
         }))
     }
 
+    /// Fetches a single stored item by id, across all presentations.
+    pub fn get_item(&self, item_id: &str) -> Result<Option<PresentationItemRecord>, AppError> {
+        self.conn
+            .query_row(
+                "SELECT id, presentation_id, type, position, payload
+                 FROM presentation_items WHERE id = ?1",
+                [item_id],
+                |row| {
+                    Ok(PresentationItemRecord {
+                        id: row.get(0)?,
+                        presentation_id: row.get(1)?,
+                        type_name: row.get(2)?,
+                        position: row.get(3)?,
+                        payload: row.get(4)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
     pub fn add_item(
         &self,
         presentation_id: &str,

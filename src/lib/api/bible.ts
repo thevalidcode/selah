@@ -61,3 +61,34 @@ export function importBibleTranslation(
 ): Promise<TranslationImportResult> {
   return command<TranslationImportResult>("import_bible_translation", { path });
 }
+
+/** Details needed to import one of the common SQLite Bible downloads. */
+export interface SqliteImportRequest {
+  /** Absolute path to the `.sqlite` file. */
+  path: string;
+  /** Short id used afterwards, e.g. `kjv`. */
+  translationId: string;
+  /** Full name shown in the interface, e.g. `King James Version`. */
+  name: string;
+  abbreviation?: string;
+  /** Make this the translation Selah starts with. */
+  makeDefault?: boolean;
+}
+
+/**
+ * Imports a translation from a SQLite file using the widely published
+ * `verses(book_id, chapter, number, text)` layout.
+ */
+export function importSqliteBibleTranslation(
+  request: SqliteImportRequest,
+): Promise<TranslationImportResult> {
+  return command<TranslationImportResult>("import_sqlite_bible_translation", {
+    request: {
+      path: request.path,
+      translationId: request.translationId,
+      name: request.name,
+      abbreviation: request.abbreviation ?? null,
+      makeDefault: request.makeDefault ?? false,
+    },
+  });
+}

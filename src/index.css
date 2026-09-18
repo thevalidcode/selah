@@ -318,7 +318,7 @@
   }
 
   .pres-shell--idle {
-    @apply bg-background;
+    @apply bg-black;
   }
 
   .pres-shell--media {

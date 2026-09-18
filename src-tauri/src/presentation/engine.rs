@@ -118,6 +118,19 @@ impl PresentationEngine {
         Ok(())
     }
 
+    /// Empties the pending queue.
+    ///
+    /// Used when starting a different saved presentation, so the new list does
+    /// not inherit leftovers from the previous one.
+    pub fn clear_queue(&self) -> Result<(), AppError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| AppError::Internal("presentation state lock poisoned".to_string()))?;
+        state.queue.clear();
+        Ok(())
+    }
+
     pub fn state(&self) -> PresentationState {
         self.state.lock().map(|g| g.clone()).unwrap_or_else(|_| {
             tracing::warn!("presentation state lock poisoned; returning empty state");

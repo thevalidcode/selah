@@ -115,10 +115,10 @@ export default function HomePage() {
               }
             />
             <ChecklistRow
-              ok={settings?.speech.recognizer === "whisper"}
+              ok={settings?.speech.recognizer === "moonshine"}
               label="Listening for words"
               detail={
-                settings?.speech.recognizer === "whisper"
+                settings?.speech.recognizer === "moonshine"
                   ? "turned on"
                   : "off — Selah cannot understand speech yet"
               }

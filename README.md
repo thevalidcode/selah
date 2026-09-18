@@ -142,31 +142,40 @@ pnpm install
 pnpm tauri dev
 ```
 
-- To enable real speech recognition using whisper.cpp, **three** things are needed. The build feature alone is not enough — Selah also needs a model, and the recognizer must be switched on in Settings:
+Two things must be true for Selah to turn speech into words: the `moonshine`
+build feature (on by default) and a model folder on disk. Selah never
+downloads a model itself.
 
-1. Install the C++ build tooling (whisper.cpp is compiled from source):
+1. Make ONNX Runtime available. Selah loads it at start-up, so it needs the
+   shared library somewhere it looks — `ORT_DYLIB_PATH`, the app's resource
+   folder, or `/usr/local/lib`. See
+   [`models/moonshine/README.md`](models/moonshine/README.md) for the full
+   search order.
 
-```bash
-brew install cmake
-```
-
-2. Build with the `whisper` feature:
-
-```bash
-pnpm tauri dev -- --features whisper
-```
-
-3. Put a model file on disk and point Settings at it. Selah never downloads models itself:
+2. Put a Moonshine model folder on disk and point Settings at it:
 
 ```bash
 # The model can live anywhere; the app data directory is the documented default.
-cp ~/Downloads/ggml-base.en.bin \
-   "$HOME/Library/Application Support/app.selah.desktop/models/whisper/"
+DEST="$HOME/Library/Application Support/app.selah.desktop/models/moonshine"
+mkdir -p "$DEST"
+cp ~/Downloads/encoder_model_quantized.onnx \
+   ~/Downloads/decoder_model_quantized.onnx \
+   ~/Downloads/tokenizer.json \
+   "$DEST/"
 ```
 
-Then open **Settings → Microphone**, set **Speech recognizer** to *whisper*, and paste the **full path** to the model file. Relative paths are resolved against the process working directory, so prefer an absolute path.
+Then open **Settings → Listening**, set **Can Selah understand words?** to
+*On*, and point **Voice model folder** at that folder.
 
-If any of the three is missing, Selah still runs — it just reports *"Voice model ready: no"* on the Live screen and returns no words.
+> **Careful with "int8" files.** A dynamically-quantised `int8` export contains
+> `ConvInteger` nodes, which ONNX Runtime's CPU provider cannot execute (it
+> supports only the uint8 form). Selah then reports
+> `Could not find an implementation for ConvInteger(10) node`. Use the
+> `_quantized` (QDQ) or unquantised files from the same model instead —
+> `models/moonshine/README.md` explains which is which.
+
+If the model or the runtime is missing, Selah still runs — it just reports
+*"Voice model ready: no"* on the Live screen and returns no words.
 
 ## Usage
 
@@ -186,7 +195,7 @@ Detected scripture will appear in the review panel. Click Display to send the co
 | Frontend     | React, TypeScript, Tailwind CSS, shadcn/ui |
 | Backend      | Rust, Tauri                                |
 | Database     | SQLite                                     |
-| Audio/Speech | CPAL, whisper.cpp                          |
+| Audio/Speech | CPAL, Moonshine on ONNX Runtime            |
 
 ## API Documentation
 
@@ -351,7 +360,7 @@ The application backend uses Tauri IPC commands for communication with the front
   "status": "success",
   "data": {
     "listening": true,
-    "recognizerId": "whisper",
+    "recognizerId": "moonshine",
     "modelLoaded": true,
     "vadEnabled": true,
     "segmentsSeen": 12,
@@ -381,7 +390,7 @@ The application backend uses Tauri IPC commands for communication with the front
   "status": "success",
   "data": {
     "listening": true,
-    "recognizerId": "whisper",
+    "recognizerId": "moonshine",
     "modelLoaded": true,
     "vadEnabled": true,
     "segmentsSeen": 0,
@@ -411,7 +420,7 @@ The application backend uses Tauri IPC commands for communication with the front
   "status": "success",
   "data": {
     "listening": false,
-    "recognizerId": "whisper",
+    "recognizerId": "moonshine",
     "modelLoaded": true,
     "vadEnabled": true,
     "segmentsSeen": 5,

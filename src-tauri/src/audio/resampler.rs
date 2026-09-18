@@ -1,6 +1,6 @@
 //! Linear-interpolation sample-rate converter.
 //!
-//! Device audio often arrives at 48 kHz or 44.1 kHz; whisper wants 16 kHz
+//! Device audio often arrives at 48 kHz or 44.1 kHz; Moonshine wants 16 kHz
 //! mono. This converter downsamples while accumulating a fractional position
 //! so chunk boundaries remain sample-accurate.
 

@@ -180,3 +180,87 @@ pub fn remove_presentation_item(
             .remove_item(&presentation_id, &item_id)
     })
 }
+
+// ---------------------------------------------------------
+// Showing saved content
+// ---------------------------------------------------------
+
+/// Shows one saved item on the projector.
+///
+/// Saved items are stored as JSON so new content kinds never need a schema
+/// change; this rebuilds the projectable item from that row and sends it to
+/// the presentation window.
+#[tauri::command]
+pub fn project_saved_item(
+    item_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<crate::models::presentation::PresentationState> {
+    let record = state
+        .with_conn(|conn| {
+            crate::bible::repository::PresentationRepository::new(conn).get_item(&item_id)
+        })?
+        .ok_or_else(|| AppError::Presentation(format!("item {item_id} no longer exists")))?;
+
+    let item = record.to_item()?;
+    state.presentation.project(item, &state.display, &app)?;
+    Ok(state.presentation.state())
+}
+
+/// Shows a whole saved presentation, starting at its first item.
+///
+/// Remaining items are queued, so the operator can walk through the whole
+/// list with the Next button without touching the editor.
+#[tauri::command]
+pub fn project_saved_presentation(
+    id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<crate::models::presentation::PresentationState> {
+    let presentation = state
+        .with_conn(|conn| crate::bible::repository::PresentationRepository::new(conn).get(&id))?
+        .ok_or_else(|| AppError::Presentation(format!("presentation {id} no longer exists")))?;
+
+    if presentation.items.is_empty() {
+        return Err(AppError::Presentation(
+            "this presentation is empty — add something to it first".to_string(),
+        ));
+    }
+
+    let mut items = Vec::with_capacity(presentation.items.len());
+    for record in &presentation.items {
+        items.push(record.to_item()?);
+    }
+
+    // First item goes on screen, the rest wait in the queue.
+    let mut remaining = items.into_iter();
+    let first = remaining.next().expect("checked for an empty list above");
+
+    state.presentation.clear_queue()?;
+    for item in remaining {
+        state.presentation.queue(item)?;
+    }
+    state.presentation.project(first, &state.display, &app)?;
+
+    Ok(state.presentation.state())
+}
+
+/// Moves to the next queued item.
+#[tauri::command]
+pub fn show_next_item(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<crate::models::presentation::PresentationState> {
+    state.presentation.show_next(&app)?;
+    Ok(state.presentation.state())
+}
+
+/// Returns to the previous item.
+#[tauri::command]
+pub fn show_previous_item(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<crate::models::presentation::PresentationState> {
+    state.presentation.show_previous(&app)?;
+    Ok(state.presentation.state())
+}

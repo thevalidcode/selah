@@ -15,7 +15,7 @@ pub struct AppPaths {
     pub data_dir: PathBuf,
     pub db_path: PathBuf,
     pub models_dir: PathBuf,
-    pub whisper_models_dir: PathBuf,
+    pub moonshine_models_dir: PathBuf,
     pub vad_models_dir: PathBuf,
     pub media_dir: PathBuf,
     pub logs_dir: PathBuf,
@@ -33,7 +33,7 @@ impl AppPaths {
         let paths = Self {
             db_path: data_dir.join("database").join("selah.db"),
             models_dir: data_dir.join("models"),
-            whisper_models_dir: data_dir.join("models").join("whisper"),
+            moonshine_models_dir: data_dir.join("models").join("moonshine"),
             vad_models_dir: data_dir.join("models").join("vad"),
             media_dir: data_dir.join("media"),
             logs_dir: data_dir.join("logs"),
@@ -48,7 +48,7 @@ impl AppPaths {
                 .map(PathBuf::from)
                 .unwrap_or_default(),
             &paths.models_dir,
-            &paths.whisper_models_dir,
+            &paths.moonshine_models_dir,
             &paths.vad_models_dir,
             &paths.media_dir,
             &paths.media_dir.join("images"),
@@ -72,18 +72,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn whisper_models_nest_under_models() {
+    fn speech_models_nest_under_models() {
         let root = PathBuf::from("/tmp/selah-test-paths");
         let paths = AppPaths {
             data_dir: root.clone(),
             db_path: root.join("database").join("selah.db"),
             models_dir: root.join("models"),
-            whisper_models_dir: root.join("models").join("whisper"),
+            moonshine_models_dir: root.join("models").join("moonshine"),
             vad_models_dir: root.join("models").join("vad"),
             media_dir: root.join("media"),
             logs_dir: root.join("logs"),
         };
-        assert!(paths.whisper_models_dir.starts_with(&paths.models_dir));
+        assert!(paths.moonshine_models_dir.starts_with(&paths.models_dir));
         assert!(paths.vad_models_dir.starts_with(&paths.models_dir));
     }
 }

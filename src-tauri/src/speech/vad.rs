@@ -2,7 +2,7 @@
 //!
 //! The pipeline never streams silence into the recognizer: only clipped
 //! speech segments reach transcription. The default implementation is a
-//! simple energy-based detector; a whisper.cpp (Silero) implementation can be
+//! simple energy-based detector; a learned (Silero) implementation can be
 //! swapped in through the same trait. The streaming helpers
 //! (`frame_is_speech`, `frame_size_ms`, ...) let the live worker make
 //! frame-by-frame decisions while `detect` supports batch analysis.

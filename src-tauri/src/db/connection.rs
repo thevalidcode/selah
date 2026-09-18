@@ -6,11 +6,18 @@ use tracing::debug;
 
 /// The versioned list of migrations. Add new migrations to the end — never
 /// edit an applied migration, because it would corrupt existing databases.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial_schema",
-    sql: include_str!("../../migrations/0001_initial.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial_schema",
+        sql: include_str!("../../migrations/0001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "fix_verse_triggers",
+        sql: include_str!("../../migrations/0002_fix_verse_triggers.sql"),
+    },
+];
 
 /// A single ordered schema migration.
 pub struct Migration {

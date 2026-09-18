@@ -1,14 +1,49 @@
-# Bible import format
+# Bible translations
 
-Selah **ships no Bible text**. Copyright in modern translations belongs to their
-publishers, so the application provides the schema and an import mechanism
-instead of bundling a translation.
+Selah bundles **three public-domain translations** so a fresh install can show
+Scripture straight away, and can import others from a file you supply.
 
-Import a translation from the **Settings → Database** screen by pointing at a
-UTF-8 JSON file on disk that you have the legal right to use (for example KJV,
-WEB, or another public-domain / licensed text).
+Copyright in modern translations belongs to their publishers, so Selah only
+ever ships text that is public domain. You are responsible for having the
+right to use anything you import yourself.
 
-## Document shape
+## Bundled translations
+
+Installed automatically on first start from `src-tauri/resources/bible/`:
+
+| File         | Translation               | Id    |
+| ------------ | ------------------------- | ----- |
+| `web.sqlite` | World English Bible       | `web` |
+| `kjv.sqlite` | King James Version        | `kjv` |
+| `asv.sqlite` | American Standard Version | `asv` |
+
+Each is copied into Selah's own database once. Re-running is harmless: a
+translation that is already installed is skipped, so this runs safely on every
+launch. `web` becomes the default translation only when nothing is installed
+yet.
+
+These files use the widely published layout:
+
+```sql
+CREATE TABLE verses (
+  book_id INTEGER,   -- 1..=66, matching Selah's canonical book registry
+  chapter INTEGER,
+  number  INTEGER,   -- the verse number
+  text    TEXT
+);
+```
+
+Any other file in this shape can be added with **Import a Bible file** on the
+Bible screen, or by copying it beside the bundled ones.
+
+## Importing other translations
+
+There are two import formats:
+
+1. **SQLite** (`.sqlite`) — the layout above.
+2. **JSON** — a flat document described below.
+
+### JSON document shape
 
 ```json
 {

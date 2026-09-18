@@ -38,6 +38,7 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send 
         bible::search_bible,
         bible::set_default_translation,
         bible::import_bible_translation,
+        bible::import_sqlite_bible_translation,
         // presentation
         presentation::get_presentation_state,
         presentation::project_text,
@@ -54,6 +55,10 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send 
         presentation::delete_presentation,
         presentation::add_presentation_item,
         presentation::remove_presentation_item,
+        presentation::project_saved_item,
+        presentation::project_saved_presentation,
+        presentation::show_next_item,
+        presentation::show_previous_item,
         // media
         media::list_media,
         media::import_media,

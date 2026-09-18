@@ -30,7 +30,13 @@ pnpm-debug.log*
 *.db-shm
 
 # Models (large binaries - never commit; READMEs stay tracked)
-models/whisper/*
+models/moonshine/*
+!models/moonshine/README.md
 models/vad/*
-!models/whisper/README.md
 !models/vad/README.md
+
+# ONNX Runtime shared library. Large, platform-specific, and not ours to
+# redistribute from here — see /models/moonshine/README.md for how to get it.
+/src-tauri/resources/*.dylib
+/src-tauri/resources/*.so
+/src-tauri/resources/*.dll

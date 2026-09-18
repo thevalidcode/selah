@@ -1,7 +1,7 @@
 //! Transcript types shared by all recognizers.
 //!
-//! The application never depends on Whisper-specific types outside the
-//! `speech::whisper` module.
+//! The application never depends on recognizer-specific types outside the
+//! individual recognizer modules.
 
 use serde::Serialize;
 
@@ -11,8 +11,8 @@ use serde::Serialize;
 pub enum TranscriptSource {
     /// Development recognizer. It never fabricates text.
     Mock,
-    /// whisper.cpp via whisper-rs.
-    Whisper,
+    /// Moonshine (ONNX) running on ONNX Runtime.
+    Moonshine,
 }
 
 /// The result of transcribing one speech segment.

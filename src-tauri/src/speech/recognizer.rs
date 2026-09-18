@@ -1,7 +1,7 @@
 //! Speech recognition boundary.
 //!
 //! Everything outside this module depends only on [`SpeechRecognizer`] and
-//! [`crate::speech::Transcript`]. Whisper specifics stay in `whisper.rs`.
+//! [`crate::speech::Transcript`]. Moonshine specifics stay in `moonshine/`.
 
 use crate::errors::AppError;
 
@@ -9,8 +9,9 @@ use super::transcript::Transcript;
 
 /// Abstraction for local speech recognition.
 ///
-/// Implementations may be real (whisper.cpp) or development mocks. Nothing in
-/// the rest of the application may depend on an implementation type.
+/// Implementations may be real (Moonshine on ONNX Runtime) or development
+/// mocks. Nothing in the rest of the application may depend on an
+/// implementation type.
 pub trait SpeechRecognizer: Send {
     /// Loads a speech model from disk. Fails cleanly if the file is missing
     /// or unreadable.
@@ -22,7 +23,7 @@ pub trait SpeechRecognizer: Send {
     /// Whether a model is currently loaded.
     fn is_loaded(&self) -> bool;
 
-    /// Stable identifier of this implementation ("whisper", "mock").
+    /// Stable identifier of this implementation ("moonshine", "mock").
     fn id(&self) -> &'static str;
 }
 
@@ -32,13 +33,16 @@ pub fn recognizer_for(kind: crate::models::settings::RecognizerKind) -> Box<dyn 
         crate::models::settings::RecognizerKind::Mock => {
             Box::new(super::mock::MockSpeechRecognizer)
         }
-        #[cfg(feature = "whisper")]
-        crate::models::settings::RecognizerKind::Whisper => {
-            Box::new(super::whisper::WhisperRecognizer::default())
+        #[cfg(feature = "moonshine")]
+        crate::models::settings::RecognizerKind::Moonshine => {
+            Box::new(super::moonshine::MoonshineRecognizer::default())
         }
-        #[cfg(not(feature = "whisper"))]
-        crate::models::settings::RecognizerKind::Whisper => {
-            tracing::warn!("whisper recognizer requested but the 'whisper' cargo feature is disabled; falling back to mock");
+        #[cfg(not(feature = "moonshine"))]
+        crate::models::settings::RecognizerKind::Moonshine => {
+            tracing::warn!(
+                "moonshine recognizer requested but the 'moonshine' cargo feature is \
+                 disabled; falling back to mock"
+            );
             Box::new(super::mock::MockSpeechRecognizer)
         }
     }

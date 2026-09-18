@@ -32,6 +32,10 @@
     "category": "Productivity",
     "shortDescription": "Offline-first church service presentation application",
     "longDescription": "Selah captures and presents church services entirely on-device: live microphone capture with voice activity detection, deterministic Scripture detection, a local SQLite Bible library, and a multi-monitor presentation window.",
+    "resources": [
+      "resources/libonnxruntime.dylib",
+      "resources/bible/*.sqlite"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

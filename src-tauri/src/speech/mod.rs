@@ -1,7 +1,7 @@
 //! Speech subsystem.
 //!
 //! Layout:
-//!   traits (recognizer, VAD) → implementations (whisper behind a feature,
+//!   traits (recognizer, VAD) → implementations (moonshine behind a feature,
 //!   mock always available) → live pipeline manager.
 
 pub mod manager;
@@ -10,8 +10,8 @@ pub mod recognizer;
 pub mod transcript;
 pub mod vad;
 
-#[cfg(feature = "whisper")]
-pub mod whisper;
+#[cfg(feature = "moonshine")]
+pub mod moonshine;
 
 pub use manager::{SpeechManager, SpeechManagerState};
 pub use recognizer::SpeechRecognizer;

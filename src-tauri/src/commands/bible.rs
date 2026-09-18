@@ -109,6 +109,76 @@ pub struct ImportResult {
     pub verses_imported: usize,
 }
 
+/// Request to import one of the common SQLite Bible downloads.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SqliteImportRequest {
+    /// Absolute path to the `.sqlite` file the operator chose.
+    pub path: String,
+    /// Short id used everywhere afterwards, e.g. `kjv`.
+    pub translation_id: String,
+    /// Full name shown in the interface, e.g. `King James Version`.
+    pub name: String,
+    pub abbreviation: Option<String>,
+    /// Whether this should become the translation Selah starts with.
+    #[serde(default)]
+    pub make_default: bool,
+}
+
+/// Imports a translation from a SQLite file that uses the widely published
+/// `verses(book_id, chapter, number, text)` layout.
+///
+/// Selah ships no Bible text; the operator points at a file they are entitled
+/// to use. The file is attached read-only and copied in one transaction.
+#[tauri::command]
+pub fn import_sqlite_bible_translation(
+    request: SqliteImportRequest,
+    state: State<'_, AppState>,
+) -> CommandResult<ImportResult> {
+    let path = std::path::PathBuf::from(request.path.trim());
+    if !path.is_absolute() {
+        return Err(AppError::InvalidConfiguration(
+            "the Bible file path must be absolute".to_string(),
+        ));
+    }
+    if !path.is_file() {
+        return Err(AppError::Media(format!(
+            "Bible file does not exist: {}",
+            path.display()
+        )));
+    }
+
+    let translation_id = request.translation_id.trim().to_lowercase();
+    if translation_id.is_empty() || request.name.trim().is_empty() {
+        return Err(AppError::InvalidConfiguration(
+            "a short id and a name are both required".to_string(),
+        ));
+    }
+
+    let info = crate::bible::models::TranslationInfo {
+        id: translation_id,
+        name: request.name.trim().to_string(),
+        language: "en".to_string(),
+        abbreviation: request.abbreviation.filter(|a| !a.trim().is_empty()),
+        is_default: request.make_default,
+    };
+
+    let outcome = state
+        .with_conn(|conn| crate::bible::import::import_sqlite_translation(conn, &path, &info))?;
+
+    if request.make_default {
+        if let Ok(mut settings) = state.settings.lock() {
+            settings.general.default_translation_id = Some(outcome.translation_id.clone());
+        }
+        state.save_settings()?;
+    }
+
+    Ok(ImportResult {
+        translation_id: outcome.translation_id,
+        verses_imported: outcome.verses_imported,
+    })
+}
+
 /// Imports a translation from a local JSON document.
 ///
 /// Selah ships no Bible text: the operator points at a file they are licensed

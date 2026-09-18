@@ -325,7 +325,7 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
             value={settings.speech.recognizer}
             onValueChange={(recognizer) =>
               void save({
-                speech: { recognizer: recognizer as "mock" | "whisper" },
+                speech: { recognizer: recognizer as "mock" | "moonshine" },
               })
             }
           >
@@ -336,39 +336,39 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
               <SelectItem value="mock">
                 Off — hears the room but writes nothing
               </SelectItem>
-              <SelectItem value="whisper">
+              <SelectItem value="moonshine">
                 On — words are worked out on this computer
               </SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            {state?.recognizerId === "whisper"
+            {state?.recognizerId === "moonshine"
               ? "Words from the microphone are turned into text on this machine."
               : "Turned off. Selah will not invent words it did not hear."}
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="model-path">Voice model file</Label>
+          <Label htmlFor="model-path">Voice model folder</Label>
           <Input
             id="model-path"
             value={settings.speech.modelPath ?? ""}
             onChange={(e) =>
               void save({ speech: { modelPath: e.target.value || undefined } })
             }
-            placeholder="…/models/whisper/ggml-base.en.bin"
+            placeholder="…/models/moonshine"
           />
           <p className="text-xs text-muted-foreground">
-            The file that teaches Selah English. Selah never downloads it for
-            you — point at one you already have.
+            The folder holding the files that teach Selah English. Selah never
+            downloads them for you — point at a folder you already have.
           </p>
-          {settings.speech.recognizer === "whisper" &&
+          {settings.speech.recognizer === "moonshine" &&
           state &&
           !state.modelLoaded ? (
             <p className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-              This file could not be opened, so words are not being written down
-              yet. Check the whole path is written out and the file is really
-              there.
+              This folder could not be opened, so words are not being written
+              down yet. Check the whole path is written out and the files are
+              really there.
             </p>
           ) : null}
         </div>
@@ -595,6 +595,33 @@ function PresentationSection({
 
 // ---------------------------------------------------------------- database
 
+/** Full names for the translations people most often have on disk. */
+const KNOWN_TRANSLATIONS: Record<string, string> = {
+  web: "World English Bible",
+  kjv: "King James Version",
+  asv: "American Standard Version",
+};
+
+/**
+ * Derives a short id and a readable name from a file path.
+ *
+ * Saves the operator from typing metadata: `…/kjv.sqlite` becomes
+ * `{ id: "kjv", name: "King James Version" }`.
+ */
+function describeFile(path: string): { id: string; name: string } {
+  const stem = (path.split(/[\\/]/).pop() ?? "")
+    .replace(/\.(sqlite3?|db|json)$/i, "")
+    .toLowerCase();
+  const id =
+    stem.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "imported";
+  return {
+    id,
+    name:
+      KNOWN_TRANSLATIONS[id] ??
+      stem.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+  };
+}
+
 function DatabaseSection() {
   const [translations, setTranslations] = useState<TranslationStatus[]>([]);
   const [importPath, setImportPath] = useState("");
@@ -612,14 +639,24 @@ function DatabaseSection() {
   useEffect(reload, [reload]);
 
   async function runImport() {
-    if (importPath.trim().length === 0) {
+    const path = importPath.trim();
+    if (path.length === 0) {
       return;
     }
     setImporting(true);
     try {
-      const result = await bibleApi.importBibleTranslation(importPath.trim());
+      // The file extension decides which reader to use.
+      const isSqlite = /\.(sqlite3?|db)$/i.test(path);
+      const result = isSqlite
+        ? await bibleApi.importSqliteBibleTranslation({
+            path,
+            translationId: describeFile(path).id,
+            name: describeFile(path).name,
+          })
+        : await bibleApi.importBibleTranslation(path);
+
       setNotice(
-        `Imported ${result.versesImported} verses for “${result.translationId}”.`,
+        `Added ${result.versesImported.toLocaleString()} verses as “${result.translationId}”.`,
       );
       setImportError(null);
       setImportPath("");
@@ -645,9 +682,11 @@ function DatabaseSection() {
         Add Bible text
       </h3>
       <p className="mb-3 text-sm text-muted-foreground">
-        Selah does not include any Bible text. Choose a file you are allowed to
-        use. The expected format is described in{" "}
-        <code className="font-mono">data/bible/README.md</code>.
+        Selah already includes three public-domain translations — WEB, KJV and
+        ASV. To add another, point at a file you are allowed to use: either a{" "}
+        <code className="font-mono">.sqlite</code> Bible or a{" "}
+        <code className="font-mono">.json</code> document. Both shapes are
+        described in <code className="font-mono">data/bible/README.md</code>.
       </p>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1 space-y-1.5">
@@ -661,7 +700,7 @@ function DatabaseSection() {
                 void runImport();
               }
             }}
-            placeholder="…/Downloads/web-bible.json"
+            placeholder="…/Downloads/kjv.sqlite"
           />
         </div>
         <Button
@@ -687,12 +726,12 @@ function DatabaseSection() {
       <Separator className="my-4" />
 
       <h3 className="mb-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        Bible text you have added
+        Bible text available
       </h3>
       {translations.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nothing added yet. Selah includes no Bible text — choose a file you
-          are allowed to use.
+          None yet. Restart Selah to install the built-in translations, or add a
+          file above.
         </p>
       ) : (
         <ul className="space-y-1.5">

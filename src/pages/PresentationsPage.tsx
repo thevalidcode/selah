@@ -87,6 +87,19 @@ export default function PresentationsPage() {
     }
   }
 
+  /** Runs a projector action, surfacing any failure in the error banner. */
+  const run = useCallback(async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await action();
+      setError(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   return (
     <>
       <PageHeader
@@ -171,6 +184,18 @@ export default function PresentationsPage() {
               await presentationApi.removePresentationItem(selected.id, itemId);
               await refreshSelected(selected.id);
             }}
+            onShowItem={(itemId) =>
+              run(() => presentationApi.projectSavedItem(itemId))
+            }
+            onShowAll={() =>
+              run(() =>
+                selected
+                  ? presentationApi.projectSavedPresentation(selected.id)
+                  : Promise.resolve(null),
+              )
+            }
+            onNext={() => run(() => presentationApi.showNextItem())}
+            onPrevious={() => run(() => presentationApi.showPreviousItem())}
           />
 
           <AddItemPanel
