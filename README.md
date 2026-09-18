@@ -1,281 +1,1352 @@
 # Selah
 
-**Offline-first church/service presentation application.**
+## Project Overview
 
-Selah listens to the microphone, understands what is being said, and turns
-detected content into presentation content on a second screen — entirely on the
-local machine. No cloud backend, no accounts, no API keys, no external AI
-service.
+Selah helps operators manage church service presentations entirely offline. It captures local audio, detects spoken references, and prepares content for projection on a second screen. This allows teams to run reliable presentations without depending on internet connectivity or external cloud services.
 
-```text
-Microphone
-    ↓
-CPAL (native input stream)
-    ↓
-Audio pipeline (ring buffer + resampler)
-    ↓
-VAD (energy-based, replaceable)
-    ↓
-Speech recognition (whisper.cpp, local, behind a trait)
-    ↓
-Transcript
-    ↓
-Deterministic content detection (rule-based; no LLM)
-    ↓
-Content resolver
-    ├── Scripture → SQLite Bible library
-    ├── Lyrics    → SQLite            (later phase)
-    ├── Media     → local library
-    └── Text      → presentation
-    ↓
-Presentation engine
-    ↓
-Display window (second monitor / projector)
+## System Architecture
+
+```mermaid
+flowchart LR
+  Mic["Microphone"]
+  Audio["Audio Pipeline"]
+  Recognizer["Speech Recognizer"]
+  Detector["Content Detector"]
+  SQLite[("Database")]
+  Display["Presentation Display"]
+
+  Mic --> Audio
+  Audio --> Recognizer
+  Recognizer --> Detector
+  Detector --> SQLite
+  SQLite --> Display
+
+  style Mic fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff
+  style Audio fill:#2e1065,stroke:#8b5cf6,stroke-width:2px,color:#fff
+  style Recognizer fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fff
+  style Detector fill:#2e1065,stroke:#8b5cf6,stroke-width:2px,color:#fff
+  style SQLite fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+  style Display fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff
 ```
 
-Detected Scripture is **never** projected automatically: it appears as a
-suggestion the operator must confirm with `Display`, `Edit` or `Ignore`.
+## Features
 
----
+- **Local Speech Recognition**: Captures audio locally, processes it through voice activity detection, and transcribes it without cloud services.
 
-## Status: phase 1 (bootstrap) complete
+```mermaid
+sequenceDiagram
+  actor Speaker
+  participant Mic
+  participant VAD
+  participant Recognizer
+  participant UI
 
-| Area                          | State                                                                   |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| Tauri 2 + React 19 + TS shell | ✅ sidebar, routing, dark-first design system (Tailwind v4 + shadcn/ui) |
-| SQLite + migrations           | ✅ bundled `rusqlite`, versioned migrations, repositories               |
-| Settings persistence          | ✅ one JSON document in `settings`, written through immediately         |
-| Live screen                   | ✅ transcript feed, detected-content review, projector state            |
-| Bible screen                  | ✅ translation/book/chapter/verse selection, preview, Display, search   |
-| Media screen                  | ✅ metadata-only library with path validation                           |
-| Presentations screen          | ✅ create/delete, JSON item payloads                                    |
-| Presentation window           | ✅ separate webview, positioned on the chosen monitor, fullscreen       |
-| Audio                         | ✅ device enumeration, selection, capture start/stop, downmix, resample |
-| Speech boundary               | ✅ `SpeechRecognizer` trait + Whisper impl (feature-gated) + dev mock   |
-| VAD                           | ✅ `VoiceActivityDetector` trait + energy VAD, speech segments          |
-| Scripture domain              | ✅ typed reference model, 66-book registry with spoken aliases          |
-| Scripture parser              | ✅ deterministic; chapter/verse, ranges, spoken number words            |
-| Content detection             | ✅ transcript → typed detections with confidence                        |
-| Presentation engine           | ✅ generic items (scripture/text/media), queue + history                |
-| Multi-monitor                 | ✅ `DisplayManager` (enumeration, target, open/close/fullscreen)        |
-| Events                        | ✅ `audio://`, `speech://`, `content://`, `presentation://`             |
-| TypeScript API layer          | ✅ `src/lib/api/*` — no `invoke` calls in components                    |
-| Tests                         | ✅ 66 Rust tests (unit + integration), `tsc` and eslint clean           |
+  Speaker->>Mic: Speak
+  Mic->>VAD: Send audio buffer
+  VAD->>Recognizer: Forward speech segment
+  Recognizer->>UI: Return transcript
+```
 
-Phase 1 deliberately stops before real transcription — see
-[Next phase](#next-phase).
+- **Deterministic Content Detection**: Analyzes transcripts for scripture references and matches them against a local database for review before projection.
 
----
+```mermaid
+sequenceDiagram
+  participant UI
+  participant Detector
+  participant DB as "Database"
+  participant Display
 
-## Requirements
+  UI->>Detector: Send transcript
+  Detector->>Detector: Parse scripture reference
+  Detector->>DB: Query passage text
+  DB->>UI: Return passage
+  UI->>Display: Operator approves projection
+```
 
-| Tool      | Version  | Notes                                               |
-| --------- | -------- | --------------------------------------------------- |
-| Rust      | ≥ 1.77   | `rustup` recommended.                               |
-| Node.js   | ≥ 20     |                                                     |
-| pnpm      | ≥ 9      | `corepack enable pnpm`.                             |
-| Xcode CLT | macOS    | Provides `clang`/`cc` for native builds.            |
-| `cmake`   | optional | **Only** needed to build with `--features whisper`. |
+- **Multi-Monitor Presentation**: Manages separate windows for the operator interface and the congregation display, keeping controls hidden from the audience.
+- **Media Management**: Imports and manages local images, videos, and audio metadata without moving large files around the disk.
 
-Tauri's platform prerequisites (WebKit/WebView2, `libsoup`, …) must be installed
-— see <https://v2.tauri.app/start/prerequisites/>.
+## Installation
 
-No `.env` file is used or required.
-
----
-
-## Getting started
+- Clone the Repository:
 
 ```bash
-pnpm install          # frontend dependencies
-pnpm tauri dev        # launch the desktop app (Vite + Rust, hot reload)
+git clone https://github.com/thevalidcode/selah.git
 ```
 
-Production build:
+- Ensure you have Node.js 20 or higher, pnpm 9 or higher, and Rust 1.77 or higher installed on your system.
+- Install frontend dependencies:
 
 ```bash
-pnpm tauri build
+pnpm install
 ```
 
-### Development commands
-
-| Command                        | What it does                                            |
-| ------------------------------ | ------------------------------------------------------- |
-| `pnpm dev`                     | Vite only (browser UI work; Tauri commands unavailable) |
-| `pnpm build`                   | `tsc --noEmit` + production Vite build                  |
-| `pnpm typecheck`               | TypeScript, no emit                                     |
-| `pnpm lint`                    | ESLint (flat config)                                    |
-| `pnpm test`                    | Vitest                                                  |
-| `pnpm tauri dev`               | Full desktop app in dev mode                            |
-| `pnpm tauri build`             | Bundled desktop application                             |
-| `pnpm rust:check`              | `cargo check` on the Tauri crate                        |
-| `pnpm rust:test`               | Rust unit + integration tests                           |
-| `pnpm rust:lint`               | `cargo clippy --all-targets` (currently zero warnings)   |
-| `pnpm rust:fmt`                | `cargo fmt`                                             |
-| `pnpm rust:fmt:check`          | `cargo fmt --check`                                     |
-
----
-
-## First run
-
-1. **Setup screen** — pick a microphone, a Bible translation and the
-   presentation display. Every step is skippable; nothing blocks you from
-   reaching Live.
-2. **Settings → Database** — import a translation you are licensed to use (see
-   [`data/bible/README.md`](data/bible/README.md)). Selah ships no Bible text.
-3. **Live** — press **Listen** to start the microphone pipeline.
-
-Everything is stored under the OS application-data directory, never inside the
-repository:
-
-```text
-<AppData>/app.selah.desktop/
-├── database/selah.db     # SQLite (WAL)
-├── models/whisper/       # ggml-*.bin
-├── models/vad/
-├── media/{images,videos,audio}
-└── logs/
-```
-
----
-
-## Architecture
-
-### Rust backend (`src-tauri/src`)
-
-```text
-audio/          device.rs capture.rs buffer.rs resampler.rs  — CPAL, no UI coupling
-speech/         recognizer.rs (trait) whisper.rs (impl) vad.rs mock.rs manager.rs
-scripture/      books.rs (registry) normalizer.rs parser.rs reference.rs resolver.rs
-bible/          database.rs models.rs repository.rs import.rs
-presentation/   engine.rs state.rs display.rs
-media/          library.rs
-db/             connection.rs migrations.rs
-models/         content.rs presentation.rs settings.rs
-commands/       audio speech scripture bible presentation media settings
-state.rs        AppState (one managed instance, explicit locking)
-errors.rs       AppError (typed; serialized without stack traces)
-events.rs       event names + payloads
-storage.rs      AppPaths (Tauri app-data resolution)
-```
-
-Rules the code follows:
-
-- **Commands are thin adapters.** Business logic lives in modules; commands only
-  borrow `State<AppState>` and delegate.
-- **All SQL lives in repositories.** Services never embed SQL.
-- **Infrastructure sits behind traits.** `SpeechRecognizer` and
-  `VoiceActivityDetector` expose no Whisper-specific types, so the recognizer is
-  replaceable and testable.
-- **No global mutable state.** `AppState` is managed once; thread ownership is
-  explicit (`Mutex`, `Arc<AtomicBool>`).
-- **No `println!` debugging.** Structured `tracing` only.
-
-### Presentation of content
-
-`ContentType` (`scripture`, `lyrics`, `text`, `image`, `video`, `announcement`,
-`slide`) plus a tagged `ContentPayload` keep the presentation engine generic. The
-engine knows nothing about the Bible; the Bible module produces content.
-
-### Frontend (`src`)
-
-```text
-components/ui/                 shadcn/ui primitives (button, card, select, …)
-components/live/               Live-screen panels
-components/presentations/      saved-presentation panels
-hooks/                         useSettings, useLiveSession, useBooks, useSetupGate
-lib/api/                       one module per command group — the ONLY invoke callers
-lib/events.ts                  typed Tauri event subscriptions
-lib/reference.ts               reference formatting (book names come from SQLite)
-pages/                         Home, Live, Bible, Media, Presentations, Settings, Setup
-presentation/                  projector webview entry point (presentation.html)
-types/index.ts                 camelCase mirrors of the Rust serde types
-```
-
-Styling is **Tailwind CSS v4** (CSS-first config in `src/index.css`) with
-**shadcn/ui** components on Radix primitives — no ad-hoc stylesheets, only
-utility classes and design-token-backed components.
-
-The projection window is a **separate webview** (`presentation.html`), so
-congregational output can never accidentally show operator chrome.
-
----
-
-## Database schema
-
-Applied by `db/migrations.rs`; migrations are embedded at compile time and
-recorded in `schema_migrations`.
-
-| Table                | Purpose                                                                  |
-| -------------------- | ------------------------------------------------------------------------ |
-| `translations`       | Installed translations (`id`, `name`, `language`, `is_default`).         |
-| `books`              | Canonical 66-book registry seeded by migration 1.                        |
-| `verses`             | Verse text, PK `(translation_id, book_id, chapter, verse)`.              |
-| `verses_fts`         | FTS5 index kept in sync by triggers; powers Bible search.                |
-| `settings`           | Key/value store; the whole settings document under `app_settings`.       |
-| `media`              | Media **metadata** only — files stay on disk.                            |
-| `presentations`      | Saved presentations.                                                     |
-| `presentation_items` | Ordered items; `payload` is JSON so new content types need no migration. |
-
-Adding a migration: never edit an applied one — append a new
-`migrations/000N_*.sql` and register it in `db/connection.rs::MIGRATIONS`.
-
----
-
-## Speech recognition
-
-whisper.cpp is compiled through `whisper-rs` behind an **optional cargo
-feature**, because it needs `cmake` and a C++ toolchain:
+- Run the application in development mode:
 
 ```bash
-# default build: real microphone → VAD pipeline, development recognizer
 pnpm tauri dev
+```
 
-# real local transcription (after installing cmake)
+- To enable real speech recognition using whisper.cpp, build with the whisper feature:
+
+```bash
 pnpm tauri dev -- --features whisper
 ```
 
-Without the feature the app runs a `MockSpeechRecognizer` that **returns an
-empty transcript**. It never fabricates text and the UI labels it explicitly, so
-a development build can never be mistaken for working transcription. No model is
-downloaded automatically — see [`models/whisper/README.md`](models/whisper/README.md).
+## Usage
 
----
+When you first launch the application, you will be greeted by the setup screen. Follow the prompts to configure your environment.
 
-## Testing
+1.  **Select a Microphone**: Choose the input device you want Selah to listen to.
+2.  **Import a Bible Translation**: Navigate to Settings, select Database, and import a translation JSON file.
+3.  **Choose a Display**: Select the monitor where the presentation window will appear.
+4.  **Start Listening**: Go to the Live screen and click the Listen button to activate the audio pipeline.
 
-```bash
-cd src-tauri && cargo test            # 50 unit + 16 integration tests
-cd src-tauri && cargo clippy --all-targets
-cd src-tauri && cargo fmt --check
-pnpm typecheck
-pnpm lint
+Detected scripture will appear in the review panel. Click Display to send the content to the presentation window.
+
+## Technologies Used
+
+| Category     | Technology                                 |
+| ------------ | ------------------------------------------ |
+| Frontend     | React, TypeScript, Tailwind CSS, shadcn/ui |
+| Backend      | Rust, Tauri                                |
+| Database     | SQLite                                     |
+| Audio/Speech | CPAL, whisper.cpp                          |
+
+## API Documentation
+
+The application backend uses Tauri IPC commands for communication with the frontend. Below are the registered endpoints.
+
+#### [IPC] list_audio_devices
+
+**Description**: Lists available audio input devices.
+
+**Request**:
+
+```json
+{}
 ```
 
-Rust coverage includes the specification's acceptance cases: spoken references
-inside flowing speech, number-word conversion (`twenty eight` → 28), verse
-ranges, book-alias normalization (`first corinthians` → `1 Corinthians`), and
-negative cases (`"we have twenty people"`, `"chapter three was difficult"`) that
-must **not** be detected.
+**Response**:
 
----
-
-## Next phase
-
-```text
-REAL MICROPHONE → VAD → WHISPER → SCRIPTURE DETECTION → PROJECTOR
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "device_1",
+      "name": "Microphone",
+      "isDefault": true,
+      "defaultSampleRate": 48000,
+      "channels": 2
+    }
+  ]
+}
 ```
 
-Concretely, phase 2 is: install `cmake`, build `--features whisper`, load a
-`ggml-*` model, validate transcript quality against a real service microphone,
-tune the VAD thresholds, and add the model-management UI (plus a microphone level
-meter) that goes with it.
+**Errors**:
 
-Future phases (explicitly **not** started): lyrics/playlist management, cloud
-sync, accounts, mobile apps, livestreaming, LLM features, speaker recognition.
+- 500: Internal error fetching audio devices
 
----
+#### [IPC] get_default_audio_device
 
-## Licensing note
+**Description**: Returns the system default audio input device.
 
-Selah contains no Bible text. Import only translations you are licensed to use.
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "device_1",
+    "name": "Microphone",
+    "isDefault": true,
+    "defaultSampleRate": 48000,
+    "channels": 2
+  }
+}
+```
+
+**Errors**:
+
+- 500: Audio query failed
+
+#### [IPC] start_audio_capture
+
+**Description**: Starts microphone capture using the configured device.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "capturing": true,
+    "deviceId": "device_1",
+    "sampleRate": 16000,
+    "channels": 1,
+    "bufferedSamples": 0
+  }
+}
+```
+
+**Errors**:
+
+- 400: Audio device not found
+- 500: Audio capture failed
+
+#### [IPC] stop_audio_capture
+
+**Description**: Stops active microphone capture.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 500: Internal error stopping capture
+
+#### [IPC] get_audio_capture_state
+
+**Description**: Retrieves the current status of the audio pipeline.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "capturing": true,
+    "deviceId": "device_1",
+    "sampleRate": 16000,
+    "channels": 1,
+    "bufferedSamples": 512
+  }
+}
+```
+
+**Errors**:
+
+- 500: Internal error getting state
+
+#### [IPC] get_speech_state
+
+**Description**: Retrieves the status of the speech recognition manager.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "listening": true,
+    "recognizerId": "whisper",
+    "modelLoaded": true,
+    "vadEnabled": true,
+    "segmentsSeen": 12,
+    "transcriptsGenerated": 10
+  }
+}
+```
+
+**Errors**:
+
+- 500: Internal error getting speech state
+
+#### [IPC] start_listening
+
+**Description**: Starts both microphone capture and the speech recognition worker.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "listening": true,
+    "recognizerId": "whisper",
+    "modelLoaded": true,
+    "vadEnabled": true,
+    "segmentsSeen": 0,
+    "transcriptsGenerated": 0
+  }
+}
+```
+
+**Errors**:
+
+- 500: Failed to spawn speech worker
+
+#### [IPC] stop_listening
+
+**Description**: Stops both the recognition worker and microphone capture.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "listening": false,
+    "recognizerId": "whisper",
+    "modelLoaded": true,
+    "vadEnabled": true,
+    "segmentsSeen": 5,
+    "transcriptsGenerated": 5
+  }
+}
+```
+
+**Errors**:
+
+- 500: Internal error stopping speech pipeline
+
+#### [IPC] start_audio_pipeline
+
+**Description**: Starts microphone capture only, without transcribing.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "capturing": true,
+    "deviceId": "device_1",
+    "sampleRate": 16000,
+    "channels": 1,
+    "bufferedSamples": 0
+  }
+}
+```
+
+**Errors**:
+
+- 400: Audio device not found
+
+#### [IPC] stop_audio_pipeline
+
+**Description**: Stops the standalone microphone capture.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 500: Internal error stopping audio
+
+#### [IPC] detect_scripture
+
+**Description**: Runs deterministic rule-based content detection on a transcript.
+
+**Request**:
+
+```json
+{
+  "transcript": "John chapter three verse sixteen"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "content": {
+        "type": "scripture",
+        "reference": {
+          "bookId": 43,
+          "chapter": 3,
+          "startVerse": 16,
+          "endVerse": 16
+        }
+      },
+      "confidence": 0.95
+    }
+  ]
+}
+```
+
+**Errors**:
+
+- 500: Detection internal error
+
+#### [IPC] list_bible_translations
+
+**Description**: Lists all imported Bible translations and their verse counts.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "translation": {
+        "id": "web",
+        "name": "World English Bible",
+        "language": "en",
+        "abbreviation": "WEB",
+        "isDefault": true,
+        "createdAt": "2023-10-01T12:00:00Z"
+      },
+      "verseCount": 31102
+    }
+  ]
+}
+```
+
+**Errors**:
+
+- 500: Database error listing translations
+
+#### [IPC] list_books
+
+**Description**: Lists all canonical Bible books in the registry.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 1,
+      "name": "Genesis",
+      "testament": "Old",
+      "abbreviation": "Gen",
+      "chapters": 50
+    }
+  ]
+}
+```
+
+**Errors**:
+
+- 500: Database error listing books
+
+#### [IPC] get_passage
+
+**Description**: Fetches a single verse or range of verses from a specific translation.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "translationId": "web",
+    "bookId": 43,
+    "chapter": 3,
+    "startVerse": 16,
+    "endVerse": 16
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "translationId": "web",
+    "reference": "John 3:16",
+    "verses": [
+      {
+        "translationId": "web",
+        "bookId": 43,
+        "chapter": 3,
+        "verse": 16,
+        "text": "For God so loved the world..."
+      }
+    ],
+    "text": "For God so loved the world..."
+  }
+}
+```
+
+**Errors**:
+
+- 400: Invalid scripture reference
+- 404: Bible translation or scripture not found
+- 500: Database error
+
+#### [IPC] search_bible
+
+**Description**: Performs a full-text search across the Bible translation index.
+
+**Request**:
+
+```json
+{
+  "translationId": "web",
+  "query": "love",
+  "limit": 25
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "translationId": "web",
+      "bookId": 43,
+      "chapter": 3,
+      "verse": 16,
+      "text": "For God so loved the world..."
+    }
+  ]
+}
+```
+
+**Errors**:
+
+- 500: Database error during search
+
+#### [IPC] set_default_translation
+
+**Description**: Sets the default translation used when one is not explicitly specified.
+
+**Request**:
+
+```json
+{
+  "translationId": "web"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 404: Bible translation not found
+- 500: Database error setting default
+
+#### [IPC] import_bible_translation
+
+**Description**: Imports a Bible translation from a local JSON file path.
+
+**Request**:
+
+```json
+{
+  "path": "/Users/operator/Downloads/web-bible.json"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "translationId": "web",
+    "versesImported": 31102
+  }
+}
+```
+
+**Errors**:
+
+- 400: Invalid configuration or invalid import path
+- 500: Database error during import
+
+#### [IPC] get_presentation_state
+
+**Description**: Returns the current state of the presentation engine queue.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "current": null,
+    "queue": [],
+    "history": []
+  }
+}
+```
+
+**Errors**:
+
+- 500: Presentation engine error
+
+#### [IPC] project_text
+
+**Description**: Sends plain text to the presentation display.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "title": "Welcome",
+    "text": "Please silence your phones.",
+    "display": 1,
+    "fullscreen": true
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "current": {
+      "id": "item_1",
+      "contentType": "text",
+      "title": "Welcome",
+      "payload": {
+        "kind": "text",
+        "text": "Please silence your phones."
+      }
+    },
+    "queue": [],
+    "history": []
+  }
+}
+```
+
+**Errors**:
+
+- 400: Display not found
+- 500: Presentation error
+
+#### [IPC] project_passage
+
+**Description**: Sends a Bible passage to the presentation display.
+
+**Request**:
+
+```json
+{
+  "passage": {
+    "translationId": "web",
+    "reference": "John 3:16",
+    "verses": [],
+    "text": "For God so loved the world..."
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "current": {
+      "id": "item_1",
+      "contentType": "scripture",
+      "title": "web John 3:16",
+      "payload": {
+        "kind": "scripture",
+        "reference": "John 3:16",
+        "translation": "web",
+        "text": "For God so loved the world..."
+      }
+    },
+    "queue": [],
+    "history": []
+  }
+}
+```
+
+**Errors**:
+
+- 500: Presentation error projecting passage
+
+#### [IPC] clear_presentation
+
+**Description**: Clears the current content from the presentation display.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "current": null,
+    "queue": [],
+    "history": []
+  }
+}
+```
+
+**Errors**:
+
+- 500: Presentation error clearing display
+
+#### [IPC] open_presentation_window
+
+**Description**: Opens the presentation window on a selected display monitor.
+
+**Request**:
+
+```json
+{
+  "display": 1,
+  "fullscreen": true
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "index": 1,
+    "name": "Display 2",
+    "size": [1920, 1080],
+    "position": [1920, 0],
+    "scaleFactor": 1.0,
+    "isPrimary": false
+  }
+}
+```
+
+**Errors**:
+
+- 400: Display not found
+- 500: Presentation error opening window
+
+#### [IPC] close_presentation_window
+
+**Description**: Closes the presentation window.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 500: Presentation error closing window
+
+#### [IPC] set_presentation_display
+
+**Description**: Sets the target display index for the presentation window.
+
+**Request**:
+
+```json
+{
+  "display": 1
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "index": 1,
+    "size": [1920, 1080],
+    "position": [1920, 0],
+    "scaleFactor": 1.0,
+    "isPrimary": false
+  }
+}
+```
+
+**Errors**:
+
+- 400: Display not found
+- 500: Presentation error setting target
+
+#### [IPC] set_fullscreen
+
+**Description**: Toggles fullscreen mode for the presentation window.
+
+**Request**:
+
+```json
+{
+  "fullscreen": true
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 400: Display not found
+- 500: Presentation error setting fullscreen
+
+#### [IPC] list_displays
+
+**Description**: Enumerates all monitors detected by the operating system.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "index": 0,
+      "name": "Built-in Display",
+      "size": [1440, 900],
+      "position": [0, 0],
+      "scaleFactor": 2.0,
+      "isPrimary": true
+    }
+  ]
+}
+```
+
+**Errors**:
+
+- 500: Display not found or error listing monitors
+
+#### [IPC] list_presentations
+
+**Description**: Lists all saved presentations.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "pres_1",
+      "name": "Sunday Morning",
+      "createdAt": "2023-10-01T12:00:00Z",
+      "updatedAt": "2023-10-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+**Errors**:
+
+- 500: Database error listing presentations
+
+#### [IPC] get_presentation
+
+**Description**: Retrieves a specific presentation and its ordered items.
+
+**Request**:
+
+```json
+{
+  "id": "pres_1"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "pres_1",
+    "name": "Sunday Morning",
+    "createdAt": "2023-10-01T12:00:00Z",
+    "updatedAt": "2023-10-01T12:00:00Z",
+    "items": []
+  }
+}
+```
+
+**Errors**:
+
+- 404: Presentation not found
+- 500: Database error fetching presentation
+
+#### [IPC] create_presentation
+
+**Description**: Creates a new empty presentation.
+
+**Request**:
+
+```json
+{
+  "name": "Sunday Evening"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "pres_2",
+    "name": "Sunday Evening",
+    "createdAt": "2023-10-01T18:00:00Z",
+    "updatedAt": "2023-10-01T18:00:00Z"
+  }
+}
+```
+
+**Errors**:
+
+- 500: Database error creating presentation
+
+#### [IPC] delete_presentation
+
+**Description**: Deletes a saved presentation.
+
+**Request**:
+
+```json
+{
+  "id": "pres_1"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 500: Database error deleting presentation
+
+#### [IPC] add_presentation_item
+
+**Description**: Adds a new item payload to a saved presentation.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "presentationId": "pres_1",
+    "type": "text",
+    "payload": "{\"kind\":\"text\",\"text\":\"Welcome\"}"
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 500: Database error adding item
+
+#### [IPC] remove_presentation_item
+
+**Description**: Removes a specific item from a saved presentation.
+
+**Request**:
+
+```json
+{
+  "presentationId": "pres_1",
+  "itemId": "item_1"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 400: Item not found in presentation
+- 500: Database error removing item
+
+#### [IPC] list_media
+
+**Description**: Lists all imported media file metadata.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "media_1",
+      "kind": "image",
+      "name": "sermon-slide.png",
+      "path": "/Users/operator/Pictures/sermon-slide.png",
+      "createdAt": "2023-10-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+**Errors**:
+
+- 500: Database error listing media
+
+#### [IPC] import_media
+
+**Description**: Imports media metadata by pointing to an absolute local file path.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "path": "/Users/operator/Pictures/sermon-slide.png"
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "media_2",
+    "kind": "image",
+    "name": "sermon-slide.png",
+    "path": "/Users/operator/Pictures/sermon-slide.png",
+    "createdAt": "2023-10-01T12:05:00Z"
+  }
+}
+```
+
+**Errors**:
+
+- 400: Invalid file path or file does not exist
+- 500: Database error importing media
+
+#### [IPC] remove_media
+
+**Description**: Removes media metadata from the library without deleting the physical file.
+
+**Request**:
+
+```json
+{
+  "id": "media_1"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 500: Database error removing media
+
+#### [IPC] get_settings
+
+**Description**: Retrieves the entire application settings document.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "general": {
+      "appName": "Selah",
+      "theme": "dark"
+    },
+    "audio": {
+      "sampleRate": 0
+    },
+    "speech": {
+      "recognizer": "mock",
+      "threads": 4,
+      "vadEnabled": true,
+      "speechSampleRate": 16000
+    },
+    "presentation": {
+      "fullscreen": true,
+      "background": "#000000",
+      "fontSize": 64,
+      "followLive": true
+    }
+  }
+}
+```
+
+**Errors**:
+
+- 500: Database error fetching settings
+
+#### [IPC] update_settings
+
+**Description**: Updates the application settings document.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "settings": {
+      "general": {
+        "appName": "Selah",
+        "theme": "dark"
+      },
+      "audio": {
+        "sampleRate": 0
+      },
+      "speech": {
+        "recognizer": "mock",
+        "threads": 4,
+        "vadEnabled": true,
+        "speechSampleRate": 16000
+      },
+      "presentation": {
+        "fullscreen": true,
+        "background": "#000000",
+        "fontSize": 64,
+        "followLive": true
+      }
+    }
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 500: Database error updating settings
+
+#### [IPC] get_setup_state
+
+**Description**: Returns the first-run configuration state of the application.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "completed": true,
+    "hasTranslations": true,
+    "hasModel": false
+  }
+}
+```
+
+**Errors**:
+
+- 500: Database error reading setup state
+
+#### [IPC] complete_setup
+
+**Description**: Marks the first-run setup sequence as completed.
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 500: Database error writing setup state
+
+## Contributing
+
+Contributions are welcome. Please ensure your changes maintain the application's offline-first architecture. Do not introduce any cloud dependencies, external trackers, or telemetry into the codebase.
+
+## Author Info
+
+- LinkedIn: https://linkedin.com/in/thevalidcode
+- X: https://x.com/thevalidcode
+
+## Badges
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-07405E?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+
+[![Readme was generated by Dokugen](https://img.shields.io/badge/Readme%20was%20generated%20by-Dokugen-brightgreen)](https://dokugen.samueltuoyo.com)
