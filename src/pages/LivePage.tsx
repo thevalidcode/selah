@@ -161,8 +161,8 @@ export default function LivePage() {
   return (
     <>
       <PageHeader
-        title="Live Service"
-        subtitle="Microphone → VAD → local recognition → deterministic detection"
+        title="Live"
+        subtitle="Selah listens and suggests verses. You decide what goes on screen."
         actions={
           <>
             <StatusPill

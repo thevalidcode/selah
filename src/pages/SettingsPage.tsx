@@ -43,8 +43,8 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Stored locally in SQLite — no cloud, no accounts"
-        actions={<Badge variant="muted">offline</Badge>}
+        subtitle="Saved on this computer. Nothing is sent anywhere."
+        actions={<Badge variant="muted">no internet needed</Badge>}
       />
 
       {error ? (
@@ -56,19 +56,19 @@ export default function SettingsPage() {
       <Tabs defaultValue="general">
         <TabsList>
           <TabsTrigger value="general">
-            <Palette className="size-3.5" /> General
+            <Palette className="size-3.5" /> Basics
           </TabsTrigger>
           <TabsTrigger value="audio">
-            <Mic className="size-3.5" /> Audio
+            <Mic className="size-3.5" /> Microphone
           </TabsTrigger>
           <TabsTrigger value="speech">
-            <Sparkles className="size-3.5" /> Speech
+            <Sparkles className="size-3.5" /> Listening
           </TabsTrigger>
           <TabsTrigger value="presentation">
-            <Monitor className="size-3.5" /> Presentation
+            <Monitor className="size-3.5" /> Screen
           </TabsTrigger>
           <TabsTrigger value="database">
-            <HardDrive className="size-3.5" /> Database
+            <HardDrive className="size-3.5" /> Bible text
           </TabsTrigger>
         </TabsList>
 
@@ -108,11 +108,11 @@ function GeneralSection({ settings, save }: { settings: Settings | null; save: S
   }, []);
 
   if (!settings) {
-    return <Panel title="General">Loading…</Panel>;
+    return <Panel title="Basics">Loading…</Panel>;
   }
 
   return (
-    <Panel title="General">
+    <Panel title="Basics">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="app-name">Application name</Label>
@@ -123,10 +123,13 @@ function GeneralSection({ settings, save }: { settings: Settings | null; save: S
               void save({ general: { appName: e.target.value } })
             }
           />
+          <p className="text-xs text-muted-foreground">
+            A label for this installation. The window title stays “Selah”.
+          </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="theme">Theme</Label>
+          <Label htmlFor="theme">Look</Label>
           <Select
             value={settings.general.theme}
             onValueChange={(theme) => {
@@ -142,14 +145,14 @@ function GeneralSection({ settings, save }: { settings: Settings | null; save: S
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="dark">Dark (recommended)</SelectItem>
+              <SelectItem value="dark">Dark (easier in a dim room)</SelectItem>
               <SelectItem value="light">Light</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="default-translation">Default Bible translation</Label>
+          <Label htmlFor="default-translation">Bible to use by default</Label>
           <Select
             value={settings.general.defaultTranslationId}
             onValueChange={async (value) => {
@@ -163,7 +166,7 @@ function GeneralSection({ settings, save }: { settings: Settings | null; save: S
             }}
           >
             <SelectTrigger id="default-translation">
-              <SelectValue placeholder="No translation installed" />
+              <SelectValue placeholder="No Bible added yet" />
             </SelectTrigger>
             <SelectContent>
               {translations.map(({ translation }) => (
@@ -220,10 +223,10 @@ function AudioSection({ settings, save }: { settings: Settings | null; save: Sav
   }
 
   return (
-    <Panel title="Audio input">
+    <Panel title="Microphone">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="input-device">Input device</Label>
+          <Label htmlFor="input-device">Which microphone</Label>
           <Select
             value={settings?.audio.inputDeviceId}
             onValueChange={(value) =>
@@ -231,22 +234,24 @@ function AudioSection({ settings, save }: { settings: Settings | null; save: Sav
             }
           >
             <SelectTrigger id="input-device">
-              <SelectValue placeholder="System default microphone" />
+              <SelectValue placeholder="Whatever the computer uses by default" />
             </SelectTrigger>
             <SelectContent>
               {devices.map((device) => (
                 <SelectItem key={device.id} value={device.id}>
                   {device.name}
-                  {device.isDefault ? " (system default)" : ""} ·{" "}
-                  {device.defaultSampleRate} Hz · {device.channels} ch
+                  {device.isDefault ? " (system default)" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            Pick the one that hears the person speaking.
+          </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="sample-rate">Sample rate</Label>
+          <Label htmlFor="sample-rate">Sound quality</Label>
           <Input
             id="sample-rate"
             type="number"
@@ -257,16 +262,16 @@ function AudioSection({ settings, save }: { settings: Settings | null; save: Sav
             }
           />
           <p className="text-xs text-muted-foreground">
-            0 = use the device default. Audio is resampled to{" "}
-            {settings?.speech.speechSampleRate ?? 16000} Hz for recognition.
+            Leave this at 0 unless you have been told otherwise — Selah adjusts
+            the sound itself before listening.
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label>Capture status</Label>
+          <Label>Is it working?</Label>
           <div className="flex items-center gap-2">
             <Badge variant={capture?.capturing ? "success" : "muted"}>
-              {capture?.capturing ? "capturing" : "stopped"}
+              {capture?.capturing ? "listening" : "off"}
             </Badge>
             <Button
               variant="outline"
@@ -274,7 +279,7 @@ function AudioSection({ settings, save }: { settings: Settings | null; save: Sav
               disabled={busy}
               onClick={() => void toggleCapture()}
             >
-              {capture?.capturing ? "Stop" : "Test capture"}
+              {capture?.capturing ? "Stop" : "Check microphone"}
             </Button>
           </div>
         </div>
@@ -285,9 +290,8 @@ function AudioSection({ settings, save }: { settings: Settings | null; save: Sav
           <Separator className="my-4" />
           <KeyValueList
             items={[
-              { label: "Device", value: capture.deviceId ?? "—" },
-              { label: "Sample rate", value: capture.sampleRate ?? "—" },
-              { label: "Channels", value: capture.channels ?? "—" },
+              { label: "Using", value: capture.deviceId ?? "—" },
+              { label: "Quality", value: capture.sampleRate ?? "—" },
             ]}
           />
         </>
@@ -309,14 +313,14 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
   }, []);
 
   if (!settings) {
-    return <Panel title="Speech">Loading…</Panel>;
+    return <Panel title="Listening">Loading…</Panel>;
   }
 
   return (
-    <Panel title="Speech recognition">
+    <Panel title="Listening">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="recognizer">Recognizer</Label>
+          <Label htmlFor="recognizer">Can Selah understand words?</Label>
           <Select
             value={settings.speech.recognizer}
             onValueChange={(recognizer) =>
@@ -330,21 +334,22 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="mock">
-                Development recognizer (no transcription)
+                Off — hears the room but writes nothing
               </SelectItem>
-              <SelectItem value="whisper">whisper.cpp (local, CPU)</SelectItem>
+              <SelectItem value="whisper">
+                On — words are worked out on this computer
+              </SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Active: {state?.recognizerId ?? "—"}
-            {state?.recognizerId === "mock"
-              ? " — the development build never fabricates text."
-              : ""}
+            {state?.recognizerId === "whisper"
+              ? "Words from the microphone are turned into text on this machine."
+              : "Turned off. Selah will not invent words it did not hear."}
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="model-path">Whisper model path</Label>
+          <Label htmlFor="model-path">Voice model file</Label>
           <Input
             id="model-path"
             value={settings.speech.modelPath ?? ""}
@@ -354,24 +359,25 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
             placeholder="…/models/whisper/ggml-base.en.bin"
           />
           <p className="text-xs text-muted-foreground">
-            Models are never downloaded automatically.
+            The file that teaches Selah English. Selah never downloads it for
+            you — point at one you already have.
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="language">Language</Label>
+          <Label htmlFor="language">Language spoken</Label>
           <Input
             id="language"
             value={settings.speech.language ?? ""}
             onChange={(e) =>
               void save({ speech: { language: e.target.value || undefined } })
             }
-            placeholder="en (blank = auto)"
+            placeholder="en — leave blank to work it out"
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="speech-rate">Recognition sample rate</Label>
+          <Label htmlFor="speech-rate">Listening quality</Label>
           <Input
             id="speech-rate"
             type="number"
@@ -383,12 +389,12 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
             }
           />
           <p className="text-xs text-muted-foreground">
-            whisper.cpp expects 16000 Hz mono.
+            Leave this at 16000 unless you have been told otherwise.
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="threads">Threads</Label>
+          <Label htmlFor="threads">How hard it works</Label>
           <Input
             id="threads"
             type="number"
@@ -398,13 +404,16 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
               void save({ speech: { threads: Number(e.target.value) || 1 } })
             }
           />
+          <p className="text-xs text-muted-foreground">
+            Higher is faster but uses more of the computer.
+          </p>
         </div>
 
         <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
           <div>
-            <p className="text-sm font-medium">Voice activity detection</p>
+            <p className="text-sm font-medium">Skip silence and noise</p>
             <p className="text-xs text-muted-foreground">
-              Only detected speech reaches the recognizer.
+              Selah only pays attention when someone is actually talking.
             </p>
           </div>
           <Switch
@@ -461,14 +470,14 @@ function PresentationSection({
   }
 
   if (!settings) {
-    return <Panel title="Presentation">Loading…</Panel>;
+    return <Panel title="Screen">Loading…</Panel>;
   }
 
   return (
-    <Panel title="Presentation output">
+    <Panel title="Screen for the congregation">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="presentation-display">Presentation display</Label>
+          <Label htmlFor="presentation-display">Which screen</Label>
           <Select
             value={
               settings.presentation.displayIndex === undefined
@@ -486,7 +495,7 @@ function PresentationSection({
             }}
           >
             <SelectTrigger id="presentation-display">
-              <SelectValue placeholder="Primary display" />
+              <SelectValue placeholder="The main screen" />
             </SelectTrigger>
             <SelectContent>
               {displays.map((display) => (
@@ -501,7 +510,7 @@ function PresentationSection({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="background">Background</Label>
+          <Label htmlFor="background">Background colour</Label>
           <Input
             id="background"
             value={settings.presentation.background}
@@ -513,7 +522,7 @@ function PresentationSection({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="font-size">Font size</Label>
+          <Label htmlFor="font-size">Text size</Label>
           <Input
             id="font-size"
             type="number"
@@ -529,9 +538,9 @@ function PresentationSection({
 
         <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
           <div>
-            <p className="text-sm font-medium">Fullscreen</p>
+            <p className="text-sm font-medium">Fill the whole screen</p>
             <p className="text-xs text-muted-foreground">
-              Project without window chrome.
+              No window edges or buttons. Best for a projector.
             </p>
           </div>
           <Switch
@@ -544,9 +553,9 @@ function PresentationSection({
 
         <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
           <div>
-            <p className="text-sm font-medium">Follow live</p>
+            <p className="text-sm font-medium">Follow the Live screen</p>
             <p className="text-xs text-muted-foreground">
-              Keep the projector in sync with the Live screen.
+              Show whatever you send from Live, without pressing anything else.
             </p>
           </div>
           <Switch
@@ -559,7 +568,7 @@ function PresentationSection({
 
         <div className="flex items-center gap-2 sm:col-span-2">
           <Badge variant={open ? "success" : "muted"}>
-            {open ? "display open" : "display closed"}
+            {open ? "screen is showing" : "screen is off"}
           </Badge>
           <Button
             variant="outline"
@@ -567,7 +576,7 @@ function PresentationSection({
             disabled={busy}
             onClick={() => void toggleWindow()}
           >
-            {open ? "Close presentation window" : "Open presentation window"}
+            {open ? "Hide the screen" : "Show the screen"}
           </Button>
         </div>
       </div>
@@ -615,26 +624,25 @@ function DatabaseSection() {
   }
 
   return (
-    <Panel title="Database">
+    <Panel title="Bible text">
       <p className="text-sm text-muted-foreground">
-        Selah stores everything in a single SQLite file inside the application
-        data directory. It is never written into the source repository, and no
-        data leaves this machine.
+        Everything Selah knows is kept in one file on this computer. Nothing is
+        uploaded, and nothing is shared with anyone else.
       </p>
 
       <Separator className="my-4" />
 
       <h3 className="mb-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        Import a translation
+        Add Bible text
       </h3>
       <p className="mb-3 text-sm text-muted-foreground">
-        Selah ships no Bible text. Point at a JSON document you are licensed to
-        use; the documented format lives in{" "}
+        Selah does not include any Bible text. Choose a file you are allowed to
+        use. The expected format is described in{" "}
         <code className="font-mono">data/bible/README.md</code>.
       </p>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1 space-y-1.5">
-          <Label htmlFor="import-path">Absolute file path</Label>
+          <Label htmlFor="import-path">File on this computer</Label>
           <Input
             id="import-path"
             value={importPath}
@@ -653,7 +661,7 @@ function DatabaseSection() {
           onClick={() => void runImport()}
         >
           <Upload className="size-4" />
-          Import
+          Add
         </Button>
       </div>
       {notice ? (
@@ -670,12 +678,12 @@ function DatabaseSection() {
       <Separator className="my-4" />
 
       <h3 className="mb-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        Installed translations
+        Bible text you have added
       </h3>
       {translations.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          None installed. Selah ships no Bible text — import a translation you
-          are licensed to redistribute.
+          Nothing added yet. Selah includes no Bible text — choose a file you
+          are allowed to use.
         </p>
       ) : (
         <ul className="space-y-1.5">
@@ -705,13 +713,11 @@ function DatabaseSection() {
 
       <KeyValueList
         items={[
-          { label: "Engine", value: "SQLite (bundled, WAL)" },
-          { label: "Schema", value: "versioned migrations" },
           {
-            label: "Tables",
-            value:
-              "translations, books, verses, verses_fts, settings, media, presentations, presentation_items",
+            label: "Where it is kept",
+            value: "This computer's app data folder",
           },
+          { label: "Internet needed", value: "Never" },
         ]}
       />
     </Panel>

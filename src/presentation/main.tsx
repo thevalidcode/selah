@@ -11,6 +11,7 @@ import { createRoot } from "react-dom/client";
 
 import { EVENTS, subscribeToPresentation } from "@/lib/events";
 import { listen } from "@tauri-apps/api/event";
+import { SelahIcon } from "@/components/ui/selah-icon";
 import type { PresentationItem } from "@/types";
 
 import "../index.css";
@@ -58,11 +59,16 @@ function PresentationScreen() {
     return (
       <div className="pres-shell pres-shell--idle">
         <div className="pres-idle">
+          {/*
+            Gold mark on black, no tile — the tile is navy and would vanish
+            against the projector background.
+          */}
+          <SelahIcon size={120} title="Selah" />
           <div className="pres-idle__mark">SELAH</div>
           <p className="pres-idle__hint">
             {connected
-              ? "Ready — nothing is being displayed"
-              : "Waiting for the operator application…"}
+              ? "Ready — nothing is on screen right now"
+              : "Waiting for the operator screen…"}
           </p>
         </div>
       </div>

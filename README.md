@@ -66,6 +66,61 @@ sequenceDiagram
 - **Multi-Monitor Presentation**: Manages separate windows for the operator interface and the congregation display, keeping controls hidden from the audience.
 - **Media Management**: Imports and manages local images, videos, and audio metadata without moving large files around the disk.
 
+## Design System
+
+### Typeface
+
+Selah uses **Creato Display** throughout — operator interface and projected
+output alike, so every screen speaks with one voice.
+
+- Self-hosted from `src/fonts/` and bundled by Vite. Selah never fetches a font
+  over the network, because it has to run on a machine with no internet.
+- Weights bundled: Light (300), Regular (400), Medium (500), Bold (700),
+  Black (900). Italics are omitted — nothing in the interface uses them.
+- Licensed under the **SIL Open Font License 1.1**, which permits embedding in
+  an application. Copyright (c) 2021 Anugrah Pasau, with Reserved Font Name
+  "Creato Display". Full text in `src/fonts/OFL.txt`; see
+  `src/fonts/README.md` for provenance and how to add a weight.
+- The reserved font name means the files must not be renamed or modified.
+
+### Brand palette
+
+Both colours are sampled directly from the logo artwork:
+
+| Token          | Value     | Role                                     |
+| -------------- | --------- | ---------------------------------------- |
+| Logo gold      | `#C9A24B` | Brand mark, active navigation, buttons   |
+| Logo navy      | `#141B2E` | Interface base, logo tile, icon          |
+
+The neutral greys are tinted toward the logo navy, so the interface reads as one
+brand rather than a grey theme with a gold highlight added afterwards.
+
+Because the logo gold only reaches about 2.4:1 contrast against white, the light
+theme uses a darkened version of the same hue for anything interactive. The logo
+itself keeps the true gold and navy in both themes via `--brand-mark` and
+`--brand-tile`, so the branding never shifts.
+
+### Logo component
+
+`src/components/ui/selah-icon.tsx` renders the logo. Use it everywhere the mark
+appears rather than repeating the artwork:
+
+```tsx
+<SelahIcon size={26} tile />            // application mark, e.g. sidebar header
+<SelahIcon size={120} />                // on a dark surface, e.g. projector slate
+```
+
+### Application icon
+
+`src-tauri/icons/selah-icon.svg` is the source of truth for every platform icon
+and uses the same 48-unit geometry as the component above. It is a rounded
+squircle with a ~23% corner radius, matching how macOS and Windows round their
+own application tiles. After editing it, regenerate the whole set:
+
+```bash
+pnpm tauri icon src-tauri/icons/selah-icon.svg
+```
+
 ## Installation
 
 - Clone the Repository:

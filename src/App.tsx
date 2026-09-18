@@ -2,6 +2,7 @@ import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useEffect } from "react";
 
 import Sidebar from "@/components/Sidebar";
+import { SelahIcon } from "@/components/ui/selah-icon";
 import { useSettings } from "@/hooks/useSettings";
 import { useSetupGate } from "@/hooks/useSetupGate";
 import BiblePage from "@/pages/BiblePage";
@@ -37,13 +38,12 @@ export default function App() {
   if (checking) {
     return (
       <div className="grid h-full place-items-center bg-background">
-        <div className="flex flex-col items-center gap-2">
-          <div className="text-2xl font-semibold tracking-[0.35em] text-foreground/90">
+        <div className="flex flex-col items-center gap-3">
+          <SelahIcon size={56} tile title="Selah" className="rounded-2xl" />
+          <div className="text-xl font-black tracking-[0.3em] text-foreground/90">
             SELAH
           </div>
-          <p className="text-sm text-muted-foreground">
-            Preparing your workspace…
-          </p>
+          <p className="text-sm text-muted-foreground">Getting things ready…</p>
         </div>
       </div>
     );
@@ -60,7 +60,7 @@ export default function App() {
           <>
             <Sidebar />
             <main className="flex-1 overflow-y-auto">
-              <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-5 lg:p-7">
+              <div className="mx-auto flex w-full max-w-6xl flex-col gap-3.5 p-4 lg:p-5">
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/live" element={<LivePage />} />

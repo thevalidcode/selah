@@ -66,28 +66,28 @@ export default function AddItemPanel({
   }
 
   return (
-    <Panel title="Add item">
+    <Panel title="Add to this presentation">
       {!presentationId ? (
-        <EmptyHint>Create or select a presentation first.</EmptyHint>
+        <EmptyHint>Create or choose a presentation first.</EmptyHint>
       ) : (
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
             <div className="space-y-1.5">
-              <Label htmlFor="item-type">Type</Label>
+              <Label htmlFor="item-type">What kind</Label>
               <Select value={type} onValueChange={setType}>
                 <SelectTrigger id="item-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="text">Text</SelectItem>
-                  <SelectItem value="scripture">Scripture</SelectItem>
-                  <SelectItem value="announcement">Announcement</SelectItem>
+                  <SelectItem value="text">Words</SelectItem>
+                  <SelectItem value="scripture">Bible verse</SelectItem>
+                  <SelectItem value="announcement">Notice</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="item-title">
-                {type === "scripture" ? "Reference" : "Title"}
+                {type === "scripture" ? "Verse" : "Heading"}
               </Label>
               <Input
                 id="item-title"
@@ -99,12 +99,12 @@ export default function AddItemPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="item-body">Body</Label>
+            <Label htmlFor="item-body">Words</Label>
             <Textarea
               id="item-body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Text shown on the presentation screen"
+              placeholder="What people will read on the screen"
             />
           </div>
 
@@ -115,11 +115,11 @@ export default function AddItemPanel({
               onClick={() => void add()}
             >
               <Plus className="size-4" />
-              Add item
+              Add
             </Button>
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Braces className="size-3" />
-              Stored as a JSON payload
+              Saved with this presentation
             </p>
           </div>
         </div>

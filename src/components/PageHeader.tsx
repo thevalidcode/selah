@@ -27,14 +27,14 @@ export default function PageHeader({
   return (
     <header
       className={cn(
-        "flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-4",
+        "flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-3",
         className,
       )}
     >
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-base font-bold tracking-tight">{title}</h1>
         {subtitle ? (
-          <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
         ) : null}
       </div>
       {actions ? (

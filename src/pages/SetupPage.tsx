@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BookOpen, CheckCircle2, Loader2, Mic, Monitor } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { SelahIcon } from "@/components/ui/selah-icon";
 import {
   Card,
   CardContent,
@@ -78,12 +79,18 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
   return (
     <div className="grid h-full place-items-center overflow-y-auto bg-background p-6">
       <div className="w-full max-w-2xl space-y-5 py-8">
-        <header className="space-y-2 text-center">
-          <div className="text-3xl font-semibold tracking-[0.35em]">SELAH</div>
-          <h1 className="text-lg font-medium">Welcome</h1>
-          <p className="text-sm text-muted-foreground">
-            Set up your presentation environment. You can change any of this
-            later in Settings.
+        <header className="space-y-3 text-center">
+          <SelahIcon
+            size={64}
+            tile
+            title="Selah"
+            className="mx-auto rounded-2xl"
+          />
+          <div className="text-2xl font-black tracking-[0.3em]">SELAH</div>
+          <h1 className="text-lg font-bold">Welcome</h1>
+          <p className="mx-auto max-w-md text-sm text-muted-foreground">
+            Three quick choices and you are ready to go. You can change any of
+            them later in Settings.
           </p>
         </header>
         <Card>
@@ -93,16 +100,16 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
               <CardTitle>Microphone</CardTitle>
             </div>
             <CardDescription>
-              Selah listens locally — audio never leaves this machine.
+              Selah listens on this computer. Your sound never leaves it.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Label htmlFor="setup-mic">Input device</Label>
+            <Label htmlFor="setup-mic">Which microphone</Label>
             {loading ? (
               <LoadingRow />
             ) : devices.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No input devices were detected. Capture can be configured later.
+                No microphones found. You can choose one later in Settings.
               </p>
             ) : (
               <Select
@@ -112,7 +119,7 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
                 }
               >
                 <SelectTrigger id="setup-mic">
-                  <SelectValue placeholder="Select a microphone" />
+                  <SelectValue placeholder="Pick a microphone" />
                 </SelectTrigger>
                 <SelectContent>
                   {devices.map((device) => (
@@ -131,20 +138,20 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
           <CardHeader>
             <div className="flex items-center gap-2">
               <BookOpen className="size-4 text-muted-foreground" />
-              <CardTitle>Bible translation</CardTitle>
+              <CardTitle>Bible text</CardTitle>
             </div>
             <CardDescription>
-              Import the translation you are licensed to use — Selah ships no
-              Bible text.
+              Add the Bible text you are allowed to use. Selah does not include
+              any of its own.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Label htmlFor="setup-translation">Default translation</Label>
+            <Label htmlFor="setup-translation">Bible to use</Label>
             {loading ? (
               <LoadingRow />
             ) : translations.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No translations installed yet. Add one from Settings → Database.
+                Nothing added yet. You can add it later in Settings.
               </p>
             ) : (
               <Select
@@ -159,7 +166,7 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
                 }}
               >
                 <SelectTrigger id="setup-translation">
-                  <SelectValue placeholder="Select a translation" />
+                  <SelectValue placeholder="Pick a Bible" />
                 </SelectTrigger>
                 <SelectContent>
                   {translations.map(({ translation, verseCount }) => (
@@ -168,7 +175,7 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
                       {translation.abbreviation
                         ? ` (${translation.abbreviation})`
                         : ""}
-                      {verseCount === 0 ? " — metadata only" : ""}
+                      {verseCount === 0 ? " — no text added yet" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -181,20 +188,20 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Monitor className="size-4 text-muted-foreground" />
-              <CardTitle>Presentation display</CardTitle>
+              <CardTitle>Screen for the congregation</CardTitle>
             </div>
             <CardDescription>
-              Where the congregation sees content. Leave blank for the primary
-              display.
+              The screen everyone else sees. Leave this blank to use the main
+              screen.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Label htmlFor="setup-display">Display</Label>
+            <Label htmlFor="setup-display">Which screen</Label>
             {loading ? (
               <LoadingRow />
             ) : displays.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No displays reported by the operating system.
+                No other screens found. The main screen will be used.
               </p>
             ) : (
               <Select
@@ -208,7 +215,7 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
                 }
               >
                 <SelectTrigger id="setup-display">
-                  <SelectValue placeholder="Select a display" />
+                  <SelectValue placeholder="Pick a screen" />
                 </SelectTrigger>
                 <SelectContent>
                   {displays.map((display) => (
@@ -236,11 +243,11 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
         <div className="flex items-center justify-between gap-3 pb-2">
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CheckCircle2 className="size-3.5" />
-            Offline · no account · no API keys
+            No account needed, nothing to sign up for
           </p>
           <Button onClick={() => void finish()} disabled={finishing}>
             {finishing ? <Loader2 className="size-4 animate-spin" /> : null}
-            Continue
+            Get started
           </Button>
         </div>
       </div>
@@ -253,7 +260,7 @@ function LoadingRow() {
   return (
     <div className="flex h-9 items-center gap-2 text-sm text-muted-foreground">
       <Loader2 className="size-3.5 animate-spin" />
-      Detecting…
+      Looking…
     </div>
   );
 }

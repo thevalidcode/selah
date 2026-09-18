@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/hooks/useSettings";
 import { audioApi, bibleApi, presentationApi, speechApi } from "@/lib/api";
+import { friendlyContentType } from "@/lib/content";
 import type {
   AudioCaptureState,
   DisplayInfo,
@@ -63,7 +64,7 @@ export default function HomePage() {
     <>
       <PageHeader
         title="Home"
-        subtitle="Offline-first service presentation"
+        subtitle="Check everything works before the service starts"
         actions={
           <>
             <StatusPill
@@ -82,95 +83,104 @@ export default function HomePage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel
-          title="Service readiness"
+          title="Are we ready?"
           actions={
             <Badge variant={ready ? "success" : "warning"}>
-              {ready ? "ready" : "needs setup"}
+              {ready ? "ready" : "finish setup"}
             </Badge>
           }
         >
           <ul className="space-y-2">
             <ChecklistRow
               ok={hasTranslation}
-              label="Bible translation with verse data"
+              label="Bible text loaded"
               detail={
                 hasTranslation
-                  ? `${translations.filter((t) => t.verseCount > 0).length} ready`
-                  : "import one you are licensed to use"
+                  ? `${translations.filter((t) => t.verseCount > 0).length} ready to use`
+                  : "add one you are allowed to use"
               }
             />
             <ChecklistRow
               ok={displays.length > 0}
-              label="Presentation display detected"
-              detail={`${displays.length} display${displays.length === 1 ? "" : "s"}`}
+              label="Screen for the congregation"
+              detail={`${displays.length} screen${displays.length === 1 ? "" : "s"} found`}
             />
             <ChecklistRow
               ok={Boolean(settings?.audio.inputDeviceId)}
-              label="Microphone selected"
+              label="Microphone chosen"
               detail={
                 settings?.audio.inputDeviceId
-                  ? "configured"
-                  : "using the system default"
+                  ? "chosen"
+                  : "using the computer default"
               }
             />
             <ChecklistRow
               ok={settings?.speech.recognizer === "whisper"}
-              label="Real speech recognizer"
+              label="Listening for words"
               detail={
                 settings?.speech.recognizer === "whisper"
-                  ? "whisper.cpp enabled"
-                  : "development recognizer (no transcription)"
+                  ? "turned on"
+                  : "off — Selah cannot understand speech yet"
               }
             />
           </ul>
         </Panel>
 
-        <Panel title="Live service">
+        <Panel title="Listening right now">
           {!speech ? (
-            <EmptyHint>Speech service is starting…</EmptyHint>
+            <EmptyHint>Starting up…</EmptyHint>
           ) : (
             <KeyValueList
               items={[
-                { label: "Listening", value: speech.listening ? "yes" : "no" },
-                { label: "Recognizer", value: speech.recognizerId },
                 {
-                  label: "VAD",
-                  value: speech.vadEnabled ? "enabled" : "bypassed",
+                  label: "Listening",
+                  value: speech.listening ? "yes" : "no",
                 },
-                { label: "Segments", value: speech.segmentsSeen },
-                { label: "Transcripts", value: speech.transcriptsGenerated },
+                {
+                  label: "Times it heard speech",
+                  value: speech.segmentsSeen,
+                },
+                {
+                  label: "Times it wrote words",
+                  value: speech.transcriptsGenerated,
+                },
               ]}
             />
           )}
         </Panel>
 
-        <Panel title="Audio capture">
+        <Panel title="Microphone">
           {!audio ? (
-            <EmptyHint>No audio device queried yet.</EmptyHint>
+            <EmptyHint>No microphone information yet.</EmptyHint>
           ) : (
             <KeyValueList
               items={[
-                { label: "Capturing", value: audio.capturing ? "yes" : "no" },
-                { label: "Device", value: audio.deviceId ?? "—" },
-                { label: "Sample rate", value: audio.sampleRate ?? "—" },
-                { label: "Channels", value: audio.channels ?? "—" },
+                {
+                  label: "Recording",
+                  value: audio.capturing ? "yes" : "no",
+                },
+                { label: "Using", value: audio.deviceId ?? "—" },
+                {
+                  label: "Sound kept in memory",
+                  value: `${Math.round(audio.bufferedSamples / 1000)}k samples`,
+                },
               ]}
             />
           )}
         </Panel>
 
         <Panel
-          title="On the projector"
+          title="On screen now"
           actions={
             current ? (
-              <Badge variant="success">{current.contentType}</Badge>
+              <Badge variant="success">{friendlyContentType(current.contentType)}</Badge>
             ) : (
               <Badge variant="muted">blank</Badge>
             )
           }
         >
           {!current ? (
-            <EmptyHint>Nothing currently displayed.</EmptyHint>
+            <EmptyHint>The screen is blank right now.</EmptyHint>
           ) : (
             <div className="space-y-1.5">
               <p className="text-sm font-medium">{current.title}</p>
@@ -184,22 +194,22 @@ export default function HomePage() {
         </Panel>
       </div>
 
-      <Panel title="Quick start">
+      <Panel title="Start here">
         <ol className="space-y-2 text-sm text-muted-foreground">
           <Step
             icon={Mic}
             index={1}
-            text="Pick a microphone in Settings → Audio."
+            text="Choose the microphone that hears the speaker."
           />
           <Step
             icon={BookOpen}
             index={2}
-            text="Import a Bible translation you are licensed to use (Settings → Database)."
+            text="Add the Bible text you are allowed to use."
           />
           <Step
             icon={Monitor}
             index={3}
-            text="Choose the presentation display, then press Listen on the Live screen."
+            text="Pick the screen the congregation sees, then press Listen on Live."
           />
         </ol>
         <div className="mt-4 flex flex-wrap gap-2">

@@ -1,0 +1,44 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 1024 1024"
+  width="1024"
+  height="1024"
+  role="img"
+  aria-label="Selah"
+>
+  <!--
+    Selah's application icon.
+
+    This file is the source of truth for every platform icon. Regenerate the
+    whole set after editing it with:
+
+        pnpm tauri icon src-tauri/icons/selah-icon.svg
+
+    Geometry is the same 48-unit grid used by the in-app component in
+    `src/components/ui/selah-icon.tsx`, so the window, the projector slate and
+    the operating-system icon can never drift apart. Keep the two in sync.
+
+    Colours are the logo's own, sampled from the original artwork:
+      navy  #141B2E
+      gold  #C9A24B
+  -->
+
+  <!-- Squircle tile. The ~23% corner radius matches what macOS and Windows
+       round their own application tiles to, so Selah looks native on both
+       without the operating system having to reshape it. -->
+  <rect x="52" y="52" width="920" height="920" rx="210" fill="#141B2E" />
+
+  <!-- The mark: a gold cross in an open frame. The vertical beam overshoots
+       the frame top and bottom; the horizontal beam meets the frame exactly. -->
+  <g
+    transform="translate(512 512) scale(17.3) translate(-24 -24)"
+    fill="none"
+    stroke="#C9A24B"
+    stroke-width="3.1"
+    stroke-linecap="butt"
+  >
+    <rect x="12.55" y="12.55" width="22.9" height="22.9" />
+    <path d="M24 7.5V40.5" />
+    <path d="M12.55 24H35.45" />
+  </g>
+</svg>

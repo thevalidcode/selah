@@ -11,97 +11,195 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ------------------------------------------------------------------ tokens */
+/* ------------------------------------------------------------------- fonts */
 
-:root {
-  --radius: 0.625rem;
-
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-
-  --card: oklch(0.185 0 0);
-  --card-foreground: oklch(0.985 0 0);
-
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-
-  --muted: oklch(0.235 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-
-  --success: oklch(0.696 0.17 162.48);
-  --warning: oklch(0.828 0.189 84.429);
-
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-
-  --sidebar: oklch(0.165 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.922 0 0);
-  --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/*
+ * Creato Display — Selah's brand typeface, self-hosted (see src/fonts/README.md).
+ * SIL Open Font License 1.1. Bundled rather than fetched so the app works with
+ * no network connection, which is a hard requirement for this project.
+ */
+@font-face {
+  font-family: "Creato Display";
+  src: url("./fonts/CreatoDisplay-Light.woff") format("woff");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
 }
 
+@font-face {
+  font-family: "Creato Display";
+  src: url("./fonts/CreatoDisplay-Regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Creato Display";
+  src: url("./fonts/CreatoDisplay-Medium.woff") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Creato Display";
+  src: url("./fonts/CreatoDisplay-Bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Creato Display";
+  src: url("./fonts/CreatoDisplay-Black.woff") format("woff");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+/* ------------------------------------------------------------------ tokens */
+
+/*
+ * Brand palette sampled directly from the Selah logo:
+ *   gold  #C9A24B  ->  oklch(0.7309 0.1146 84.99)
+ *   navy  #141B2E  ->  oklch(0.2255 0.0386 267.86)
+ *
+ * The neutral greys are tinted toward the logo navy so the whole interface
+ * reads as one brand instead of a grey theme with a gold highlight bolted on.
+ */
+
+:root {
+  /* Radius is deliberately small: desktop applications use tighter corners
+     than websites, and it is the single biggest "feels native" cue. */
+  --radius: 0.5rem;
+
+  --brand: oklch(0.7309 0.1146 84.99);
+  --brand-strong: oklch(0.7685 0.1237 84.8);
+  --brand-foreground: oklch(0.2255 0.0386 267.86);
+
+  /* Constant brand marks — identical in both themes, exactly like the app
+     icon. The logo is the one thing that must never change colour. */
+  --brand-mark: oklch(0.7309 0.1146 84.99);
+  --brand-tile: oklch(0.2255 0.0386 267.86);
+
+  --background: oklch(0.158 0.024 266);
+  --foreground: oklch(0.972 0.006 265);
+
+  --card: oklch(0.201 0.026 266);
+  --card-foreground: oklch(0.972 0.006 265);
+
+  --popover: oklch(0.222 0.028 266);
+  --popover-foreground: oklch(0.972 0.006 265);
+
+  --primary: oklch(0.7309 0.1146 84.99);
+  --primary-foreground: oklch(0.2255 0.0386 267.86);
+
+  --secondary: oklch(0.272 0.028 266);
+  --secondary-foreground: oklch(0.972 0.006 265);
+
+  --muted: oklch(0.244 0.026 266);
+  --muted-foreground: oklch(0.718 0.018 265);
+
+  --accent: oklch(0.286 0.03 266);
+  --accent-foreground: oklch(0.972 0.006 265);
+
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.972 0.006 265);
+
+  --success: oklch(0.72 0.16 158);
+  --warning: oklch(0.828 0.189 84.429);
+
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.7309 0.1146 84.99 / 55%);
+
+  --sidebar: oklch(0.176 0.026 266);
+  --sidebar-foreground: oklch(0.972 0.006 265);
+  --sidebar-primary: oklch(0.7309 0.1146 84.99);
+  --sidebar-primary-foreground: oklch(0.2255 0.0386 267.86);
+  --sidebar-accent: oklch(0.262 0.028 266);
+  --sidebar-accent-foreground: oklch(0.972 0.006 265);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.7309 0.1146 84.99 / 55%);
+}
+
+/*
+ * Light theme.
+ *
+ * The logo gold is only ~2.4:1 against white, which fails for text and icons,
+ * so the light palette uses a darkened version of the same hue (--brand) for
+ * anything interactive. The logo mark itself keeps the true gold/navy from
+ * --brand-mark / --brand-tile, so the branding stays identical in both themes.
+ */
 .light {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --brand: oklch(0.5437 0.0898 81.65);
+  --brand-strong: oklch(0.4943 0.0825 80.25);
+  --brand-foreground: oklch(0.99 0.002 265);
+
+  --brand-mark: oklch(0.7309 0.1146 84.99);
+  --brand-tile: oklch(0.2255 0.0386 267.86);
+
+  --background: oklch(0.986 0.003 265);
+  --foreground: oklch(0.205 0.026 266);
 
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.205 0.026 266);
 
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.205 0.026 266);
 
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.5437 0.0898 81.65);
+  --primary-foreground: oklch(0.99 0.002 265);
 
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.958 0.005 265);
+  --secondary-foreground: oklch(0.28 0.026 266);
 
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted: oklch(0.958 0.005 265);
+  --muted-foreground: oklch(0.505 0.018 266);
 
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent: oklch(0.945 0.008 265);
+  --accent-foreground: oklch(0.24 0.026 266);
 
   --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
+  --destructive-foreground: oklch(0.99 0.002 265);
 
-  --success: oklch(0.627 0.194 149.214);
-  --warning: oklch(0.769 0.188 70.08);
+  --success: oklch(0.58 0.15 155);
+  --warning: oklch(0.68 0.16 72);
 
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.905 0.006 265);
+  --input: oklch(0.905 0.006 265);
+  --ring: oklch(0.5437 0.0898 81.65 / 45%);
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.968 0.004 265);
+  --sidebar-foreground: oklch(0.205 0.026 266);
+  --sidebar-primary: oklch(0.5437 0.0898 81.65);
+  --sidebar-primary-foreground: oklch(0.99 0.002 265);
+  --sidebar-accent: oklch(0.932 0.008 265);
+  --sidebar-accent-foreground: oklch(0.24 0.026 266);
+  --sidebar-border: oklch(0.9 0.006 265);
+  --sidebar-ring: oklch(0.5437 0.0898 81.65 / 45%);
 }
 
 /* ------------------------------------------------------------------- theme */
 
 @theme inline {
+  /*
+   * Creato Display is applied to the whole application — operator interface
+   * and projected output alike — so every screen shares one voice. `--font-mono`
+   * is intentionally left alone: file paths and code must stay monospaced.
+   */
+  --font-sans: "Creato Display", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Creato Display", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-mark: var(--brand-mark);
+  --color-brand-tile: var(--brand-tile);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -146,19 +244,34 @@
     @apply border-border outline-ring/50;
   }
 
+  /*
+   * Both entry points must fill the webview. The operator app mounts at
+   * `#root`; the projector window mounts at `#presentation-root`. Without the
+   * second id the projected screen collapses to the height of its own content,
+   * which is why it is listed here.
+   */
   html,
   body,
-  #root {
+  #root,
+  #presentation-root {
     height: 100%;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-      "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--font-sans);
+    /* Creato Display is a display face; a hair of negative tracking keeps it
+       from feeling loose at 12–14px interface sizes. */
+    letter-spacing: -0.006em;
     /* Presentation software should never show a selection caret by accident. */
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  /* Brand-coloured selection, so even the OS-level highlight stays on palette. */
+  ::selection {
+    background: var(--brand);
+    color: var(--brand-foreground);
   }
 
   /* Text the operator may want to copy stays selectable. */
@@ -217,11 +330,11 @@
   }
 
   .pres-idle {
-    @apply flex flex-col items-center gap-4 text-center;
+    @apply flex flex-col items-center gap-5 text-center;
   }
 
   .pres-idle__mark {
-    @apply text-3xl font-semibold tracking-[0.4em] text-white/25;
+    @apply text-sm font-bold tracking-[0.5em] text-white/35;
   }
 
   .pres-idle__hint {

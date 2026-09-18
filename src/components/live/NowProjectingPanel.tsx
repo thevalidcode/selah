@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { friendlyContentType } from "@/lib/content";
 import type { PresentationItem } from "@/types";
 
 /** What is on the projector right now, plus a one-click clear. */
@@ -33,10 +34,10 @@ export default function NowProjectingPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Presentation</CardTitle>
+        <CardTitle>On screen now</CardTitle>
         <div className="flex items-center gap-2">
           <Badge variant={projected ? "success" : "muted"}>
-            {projected ? "display open" : "display closed"}
+            {projected ? "showing" : "screen is off"}
           </Badge>
           <Button
             variant="ghost"
@@ -45,17 +46,17 @@ export default function NowProjectingPanel({
             disabled={working || !current}
           >
             <Eraser className="size-3.5" />
-            Clear
+            Blank screen
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         {!current ? (
-          <EmptyHint>Nothing currently displayed.</EmptyHint>
+          <EmptyHint>The screen is blank.</EmptyHint>
         ) : (
           <div className="space-y-2">
             <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-              {current.contentType}
+              {friendlyContentType(current.contentType)}
             </p>
             <p className="text-base font-medium">{current.title}</p>
             <p className="selectable line-clamp-4 text-sm text-muted-foreground">

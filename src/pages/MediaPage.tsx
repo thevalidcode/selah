@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { mediaApi } from "@/lib/api";
+import { friendlyContentType } from "@/lib/content";
 import type { MediaItem } from "@/types";
 
 /**
@@ -66,8 +67,8 @@ export default function MediaPage() {
     <>
       <PageHeader
         title="Media"
-        subtitle="Images, video and audio stay on disk — SQLite stores metadata only"
-        actions={<Badge variant="muted">{items.length} items</Badge>}
+        subtitle="Your pictures, videos and sound files stay where they are — Selah only remembers where to find them"
+        actions={<Badge variant="muted">{items.length} files</Badge>}
       />
 
       {error ? (
@@ -76,10 +77,10 @@ export default function MediaPage() {
         </p>
       ) : null}
 
-      <Panel title="Import a file">
+      <Panel title="Add a file">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-1.5">
-            <Label htmlFor="media-path">Absolute file path</Label>
+            <Label htmlFor="media-path">File on this computer</Label>
             <Input
               id="media-path"
               value={path}
@@ -98,20 +99,19 @@ export default function MediaPage() {
             onClick={() => void importFromPath()}
           >
             <Import className="size-4" />
-            Import
+            Add
           </Button>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Supported: png, jpg, jpeg, gif, webp, bmp, mp4, mov, m4v, mkv, webm,
-          mp3, wav, flac, ogg, m4a.
+          Pictures, video and sound files all work.
         </p>
       </Panel>
 
-      <Panel title="Library">
+      <Panel title="Your files">
         {items.length === 0 ? (
           <EmptyHint>
-            Nothing imported yet. Importing registers a file with the library so
-            it can be queued on the projector.
+            Nothing added yet. Add a file and it becomes available to put on the
+            screen.
           </EmptyHint>
         ) : (
           <ScrollArea className="max-h-[26rem]">
@@ -130,7 +130,7 @@ export default function MediaPage() {
                       {item.path}
                     </p>
                   </div>
-                  <Badge variant="muted">{item.kind}</Badge>
+                  <Badge variant="muted">{friendlyContentType(item.kind)}</Badge>
                   <Button
                     variant="ghost"
                     size="icon"

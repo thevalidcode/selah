@@ -33,11 +33,11 @@ export default function LiveTranscriptPanel({
   return (
     <Card className="min-h-[22rem]">
       <CardHeader>
-        <CardTitle>Live transcript</CardTitle>
+        <CardTitle>What Selah hears</CardTitle>
         <div className="flex items-center gap-2">
           <Badge variant={listening ? "success" : "muted"}>
             <Radio className="size-3" />
-            {listening ? "capturing" : "stopped"}
+            {listening ? "listening" : "paused"}
           </Badge>
           <Button
             variant="ghost"
@@ -46,7 +46,7 @@ export default function LiveTranscriptPanel({
             disabled={feed.length === 0}
           >
             <Eraser className="size-3.5" />
-            Clear
+            Clear list
           </Button>
         </div>
       </CardHeader>
@@ -59,8 +59,8 @@ export default function LiveTranscriptPanel({
           ) : (
             <EmptyHint>
               {listening
-                ? "Waiting for speech… VAD only forwards detected speech to the recognizer."
-                : "Press Listen to start the microphone pipeline."}
+                ? "Waiting for someone to speak…"
+                : "Press Listen to let Selah hear the room."}
             </EmptyHint>
           )}
         </div>
@@ -70,15 +70,15 @@ export default function LiveTranscriptPanel({
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-              History
+              Earlier
             </span>
             <span className="text-[10px] text-muted-foreground">
-              {feed.length} segment{feed.length === 1 ? "" : "s"}
+              {feed.length} line{feed.length === 1 ? "" : "s"}
             </span>
           </div>
           <ScrollArea className="h-40">
             {feed.length === 0 ? (
-              <EmptyHint>No transcripts yet.</EmptyHint>
+              <EmptyHint>Nothing heard yet.</EmptyHint>
             ) : (
               <ul className="space-y-2 pr-3">
                 {[...feed].reverse().map((entry) => (
@@ -88,9 +88,7 @@ export default function LiveTranscriptPanel({
                   >
                     <ArrowRight className="mt-0.5 size-3 shrink-0 opacity-50" />
                     <span className={entry.empty ? "italic" : undefined}>
-                      {entry.empty
-                        ? "(no text returned — the recognizer produced no speech)"
-                        : entry.text}
+                      {entry.empty ? "(nothing was heard)" : entry.text}
                     </span>
                   </li>
                 ))}

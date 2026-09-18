@@ -24,36 +24,40 @@ export default function PipelineDiagnosticsPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Pipeline diagnostics</CardTitle>
+        <CardTitle>Behind the scenes</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {!speechState ? (
-          <p className="text-sm text-muted-foreground">
-            Speech service is starting…
-          </p>
+          <p className="text-sm text-muted-foreground">Starting up…</p>
         ) : (
           <div className="grid gap-x-10 sm:grid-cols-2">
             <KeyValueList
               items={[
-                { label: "Recognizer", value: speechState.recognizerId },
                 {
-                  label: "Model loaded",
+                  label: "Listening for words",
+                  value: speechState.recognizerId === "whisper" ? "yes" : "no",
+                },
+                {
+                  label: "Voice model ready",
                   value: speechState.modelLoaded ? "yes" : "no",
                 },
                 {
-                  label: "VAD",
-                  value: speechState.vadEnabled ? "enabled" : "bypassed",
+                  label: "Skips silence",
+                  value: speechState.vadEnabled ? "yes" : "no",
                 },
               ]}
             />
             <KeyValueList
               items={[
-                { label: "Speech segments", value: speechState.segmentsSeen },
                 {
-                  label: "Transcripts",
+                  label: "Times it heard speech",
+                  value: speechState.segmentsSeen,
+                },
+                {
+                  label: "Times it wrote words",
                   value: speechState.transcriptsGenerated,
                 },
-                { label: "Pending results", value: pendingCount },
+                { label: "Waiting for you", value: pendingCount },
               ]}
             />
           </div>
@@ -61,17 +65,15 @@ export default function PipelineDiagnosticsPanel({
 
         {speechState?.recognizerId === "mock" ? (
           <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-            The development recognizer is active. It runs the real microphone →
-            VAD pipeline but returns no text, so no Scripture can be detected.
-            Build with the{" "}
-            <code className="font-mono">whisper</code> cargo feature and install
-            a model in Settings → Speech for real transcription.
+            Selah is hearing the room but is not turning speech into words, so
+            no Bible verses can be found. Turn on listening in Settings →
+            Listening to enable it.
           </p>
         ) : null}
 
         {speechState?.lastError ? (
           <p className="text-xs text-destructive">
-            Last error: {speechState.lastError}
+            Something went wrong: {speechState.lastError}
           </p>
         ) : null}
       </CardContent>

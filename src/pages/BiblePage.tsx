@@ -150,7 +150,7 @@ export default function BiblePage() {
     <>
       <PageHeader
         title="Bible"
-        subtitle="Local SQLite library · deterministic references"
+        subtitle="Look up a verse and send it to the screen"
         actions={
           translations.length === 0 ? (
             <Badge variant="warning">no translation installed</Badge>
@@ -168,19 +168,19 @@ export default function BiblePage() {
 
       <div className="grid gap-4 lg:grid-cols-[19rem_1fr]">
         <div className="flex flex-col gap-4">
-          <Panel title="Reference">
+          <Panel title="Find a verse">
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="bible-translation">Translation</Label>
+                <Label htmlFor="bible-translation">Bible</Label>
                 <Select value={translationId} onValueChange={setTranslationId}>
                   <SelectTrigger id="bible-translation">
-                    <SelectValue placeholder="Select a translation" />
+                    <SelectValue placeholder="Pick a Bible" />
                   </SelectTrigger>
                   <SelectContent>
                     {translations.map(({ translation, verseCount }) => (
                       <SelectItem key={translation.id} value={translation.id}>
                         {translation.abbreviation ?? translation.name}
-                        {verseCount === 0 ? " — metadata only" : ""}
+                        {verseCount === 0 ? " — no text added yet" : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -271,7 +271,7 @@ export default function BiblePage() {
             </div>
           </Panel>
 
-          <Panel title="Search">
+          <Panel title="Search words">
             <div className="flex gap-2">
               <Input
                 value={query}
@@ -360,7 +360,7 @@ function PassagePanel({
 }) {
   return (
     <Panel
-      title="Passage"
+      title="Verse"
       actions={
         <Button
           variant="success"
@@ -369,22 +369,21 @@ function PassagePanel({
           onClick={onDisplay}
         >
           <MonitorPlay className="size-3.5" />
-          Display
+          Show on screen
         </Button>
       }
     >
       {loading ? (
-        <EmptyHint>Loading passage…</EmptyHint>
+        <EmptyHint>Loading…</EmptyHint>
       ) : !passage ? (
         <EmptyHint>
           {hasTranslations
-            ? "Select a reference to preview the passage."
-            : "No translation is installed. Import one you are licensed to use in Settings → Database."}
+            ? "Pick a verse on the left to see it here."
+            : "No Bible text added yet. Add one from Settings → Bible text."}
         </EmptyHint>
       ) : passage.verses.length === 0 ? (
         <EmptyHint>
-          No verses are stored for {emptyReference} in this translation. Install
-          verse data, or choose another reference.
+          There is no text saved for {emptyReference}. Choose a different verse.
         </EmptyHint>
       ) : (
         <article className="space-y-4">

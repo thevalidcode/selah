@@ -46,17 +46,20 @@ export default function PresentationItemsPanel({
     >
       {!presentation ? (
         <EmptyHint>
-          Select a presentation to see its items, or create a new one.
+          Choose a presentation on the left to see what is in it, or create a
+          new one.
         </EmptyHint>
       ) : items.length === 0 ? (
-        <EmptyHint>This presentation has no items yet. Add one below.</EmptyHint>
+        <EmptyHint>
+          Nothing here yet. Add something using the box below.
+        </EmptyHint>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-12">#</TableHead>
-              <TableHead className="w-28">Type</TableHead>
-              <TableHead>Payload</TableHead>
+              <TableHead className="w-28">Kind</TableHead>
+              <TableHead>Content</TableHead>
               <TableHead className="w-16 text-right">·</TableHead>
             </TableRow>
           </TableHeader>

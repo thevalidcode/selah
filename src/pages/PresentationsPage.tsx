@@ -91,7 +91,7 @@ export default function PresentationsPage() {
     <>
       <PageHeader
         title="Presentations"
-        subtitle="Saved service content, stored in the local database"
+        subtitle="Content you have saved to use again"
         actions={<Badge variant="muted">{presentations.length} saved</Badge>}
       />
 
@@ -124,11 +124,14 @@ export default function PresentationsPage() {
                 <Plus className="size-4" />
               </Button>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Give it a name you will recognise later.
+            </p>
           </Panel>
 
-          <Panel title="Saved">
+          <Panel title="Your presentations">
             {presentations.length === 0 ? (
-              <EmptyHint>No presentations saved yet.</EmptyHint>
+              <EmptyHint>Nothing saved yet.</EmptyHint>
             ) : (
               <ul className="space-y-1">
                 {presentations.map((item) => (

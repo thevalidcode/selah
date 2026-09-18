@@ -55,25 +55,25 @@ export default function DetectedPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Detected content</CardTitle>
+        <CardTitle>We heard a verse</CardTitle>
         {detection?.confidence !== undefined ? (
           <Badge variant="success">
-            {Math.round(detection.confidence * 100)}% match
+            {Math.round(detection.confidence * 100)}% sure
           </Badge>
         ) : null}
       </CardHeader>
       <CardContent className="space-y-3">
         {!detection ? (
           <EmptyHint>
-            No Scripture detected yet. References found in speech appear here for
-            confirmation — nothing is projected automatically.
+            Nothing yet. When someone says a Bible verse, it appears here for
+            you to approve — nothing goes on screen on its own.
           </EmptyHint>
         ) : (
           <>
-            <div className="rounded-lg border border-success/30 bg-success/5 p-4">
-              <div className="flex items-center gap-2 text-[10px] font-semibold tracking-[0.16em] text-success uppercase">
+            <div className="rounded-lg border border-brand/30 bg-brand/5 p-4">
+              <div className="flex items-center gap-2 text-[10px] font-semibold tracking-[0.16em] text-brand uppercase">
                 <BookOpen className="size-3" />
-                Scripture
+                Bible verse
               </div>
               <p className="mt-1.5 text-2xl font-semibold tracking-tight">
                 {reference
@@ -92,12 +92,12 @@ export default function DetectedPanel({
                 <Input
                   value={editTitle}
                   onChange={(e) => onEditTitle(e.target.value)}
-                  placeholder="Reference label (e.g. John 3:16)"
+                  placeholder="What to show at the top (for example, John 3:16)"
                 />
                 <Textarea
                   value={editText}
                   onChange={(e) => onEditText(e.target.value)}
-                  placeholder="Override the passage text before displaying. Leave blank to use the stored translation text."
+                  placeholder="Type your own words, or leave this blank to use the Bible text you have."
                 />
               </div>
             ) : null}
@@ -116,22 +116,22 @@ export default function DetectedPanel({
                 }
               >
                 <MonitorPlay className="size-3.5" />
-                Display
+                Show on screen
               </Button>
               {editing ? (
                 <Button variant="ghost" size="sm" onClick={onCancelEdit}>
                   <X className="size-3.5" />
-                  Cancel edit
+                  Cancel
                 </Button>
               ) : (
                 <Button variant="outline" size="sm" onClick={onStartEdit}>
                   <Pencil className="size-3.5" />
-                  Edit
+                  Edit words
                 </Button>
               )}
               <Button variant="ghost" size="sm" onClick={onIgnore}>
                 <X className="size-3.5" />
-                Ignore
+                Not now
               </Button>
             </div>
           </>
