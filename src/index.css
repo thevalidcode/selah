@@ -1,0 +1,262 @@
+/*
+ * Selah design system.
+ *
+ * Tailwind CSS v4 (CSS-first configuration) + shadcn/ui token names.
+ * The operator UI is dark by default because Selah is used in dimly lit
+ * auditoriums; `.light` on <html> switches to the light palette.
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ------------------------------------------------------------------ tokens */
+
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+
+  --card: oklch(0.185 0 0);
+  --card-foreground: oklch(0.985 0 0);
+
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+
+  --muted: oklch(0.235 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  --success: oklch(0.696 0.17 162.48);
+  --warning: oklch(0.828 0.189 84.429);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+
+  --sidebar: oklch(0.165 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.922 0 0);
+  --sidebar-primary-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+.light {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  --success: oklch(0.627 0.194 149.214);
+  --warning: oklch(0.769 0.188 70.08);
+
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* ------------------------------------------------------------------- theme */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* -------------------------------------------------------------------- base */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    /* Presentation software should never show a selection caret by accident. */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Text the operator may want to copy stays selectable. */
+  input,
+  textarea,
+  [contenteditable="true"],
+  .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+}
+
+/* --------------------------------------------------------------- utilities */
+
+@utility no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/*
+ * ---------------------------------------------------- presentation screen
+ *
+ * Used only by the projection webview (`presentation.html`). Everything here
+ * is defined with @apply against the shared design tokens so the congregation
+ * view stays visually consistent with the operator UI without duplicating
+ * color values.
+ */
+
+@layer components {
+  .pres-shell {
+    @apply grid h-full w-full place-items-center overflow-hidden bg-black px-[6vw] py-[5vh];
+  }
+
+  .pres-shell--idle {
+    @apply bg-background;
+  }
+
+  .pres-shell--media {
+    @apply bg-black p-0;
+  }
+
+  .pres-media {
+    @apply h-full w-full object-contain;
+  }
+
+  .pres-idle {
+    @apply flex flex-col items-center gap-4 text-center;
+  }
+
+  .pres-idle__mark {
+    @apply text-3xl font-semibold tracking-[0.4em] text-white/25;
+  }
+
+  .pres-idle__hint {
+    @apply text-sm text-white/30;
+  }
+
+  .pres-scripture {
+    @apply flex h-full w-full flex-col items-center justify-center gap-[4vh] text-center;
+  }
+
+  .pres-scripture__head {
+    @apply flex flex-col items-center gap-2;
+  }
+
+  .pres-scripture__reference {
+    @apply text-[clamp(2rem,5vw,4.5rem)] font-semibold uppercase tracking-[0.12em] text-white;
+  }
+
+  .pres-scripture__translation {
+    @apply text-[clamp(0.75rem,1.1vw,1rem)] font-medium uppercase tracking-[0.35em] text-white/45;
+  }
+
+  .pres-scripture__text {
+    @apply max-w-[62ch] text-[clamp(1.5rem,3.1vw,3.25rem)] font-light leading-[1.35] text-white/95;
+  }
+
+  .pres-text {
+    @apply flex flex-col items-center gap-[3vh] text-center;
+  }
+
+  .pres-text__title {
+    @apply text-[clamp(1.75rem,4vw,3.5rem)] font-semibold tracking-[0.08em] text-white;
+  }
+
+  .pres-text__body {
+    @apply max-w-[60ch] text-[clamp(1.25rem,2.6vw,2.75rem)] font-light leading-[1.4] text-white/95;
+  }
+}

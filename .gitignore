@@ -1,0 +1,36 @@
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+
+# Rust / Tauri
+/src-tauri/target/
+/src-tauri/gen/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data (never commit local app data)
+/data/runtime/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Models (large binaries - never commit; READMEs stay tracked)
+models/whisper/*
+models/vad/*
+!models/whisper/README.md
+!models/vad/README.md

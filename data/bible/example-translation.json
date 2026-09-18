@@ -1,0 +1,17 @@
+{
+  "_comment": "TEMPLATE ONLY. Selah does not ship Scripture text. Replace the placeholder verse text with text you are legally allowed to use, then import this file from Settings -> Database -> Import a translation. See README.md in this directory for the full format.",
+  "translation": {
+    "id": "example",
+    "name": "Example Translation",
+    "language": "en",
+    "abbreviation": "EX"
+  },
+  "verses": [
+    {
+      "bookId": 43,
+      "chapter": 3,
+      "verse": 16,
+      "text": "REPLACE WITH VERSE TEXT YOU ARE LICENSED TO USE"
+    }
+  ]
+}

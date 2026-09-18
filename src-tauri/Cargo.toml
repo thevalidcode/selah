@@ -1,0 +1,57 @@
+[package]
+name = "selah"
+version = "0.1.0"
+description = "Selah — offline-first church service presentation application"
+authors = ["Selah"]
+edition = "2021"
+rust-version = "1.77"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "selah_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.40", features = ["bundled"] }
+thiserror = "2"
+anyhow = "1"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+regex = "1"
+cpal = "0.18"
+chrono = { version = "0.4", features = ["clock"] }
+
+# whisper.cpp bindings. Intel macOS CPU inference is supported by whisper.cpp
+# and compiled through this crate.
+#
+# This is an OPTIONAL feature and is NOT part of the default build:
+#   * compiling it requires `cmake` (whisper.cpp is a C++ codebase), and
+#   * a model file is required at runtime (never auto-downloaded).
+#
+# Enable it with: `cargo build --features whisper` (after installing cmake).
+# Until then the app runs the real microphone → VAD pipeline and uses the
+# clearly-marked MockSpeechRecognizer for transcription.
+whisper-rs = { version = "0.16", optional = true }
+tracing-appender = "0.2.5"
+
+[features]
+default = []
+whisper = ["dep:whisper-rs"]
+
+[profile.release]
+# Small, predictable binaries for a presentation machine.
+codegen-units = 1
+lto = true
+strip = true
+
+[profile.dev]
+debug = true

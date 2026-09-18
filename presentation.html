@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Selah Presentation</title>
+    <!--
+      Minimal pre-CSS reset. This window is projected to the congregation, so it
+      must be black from the very first paint — before the bundled stylesheet
+      loads — to avoid a white flash on the screen.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="presentation-root"></div>
+    <script type="module" src="/src/presentation/main.tsx"></script>
+  </body>
+</html>
