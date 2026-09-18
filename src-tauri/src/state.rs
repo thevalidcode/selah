@@ -104,8 +104,7 @@ impl AppState {
                         "stored voice model path is not a folder; using the default model folder"
                     );
                 }
-                settings.speech.model_path =
-                    Some(paths.moonshine_models_dir.display().to_string());
+                settings.speech.model_path = Some(paths.moonshine_models_dir.display().to_string());
                 settings_persist_needed = true;
             }
         }

@@ -130,6 +130,28 @@ impl<'a> BibleRepository<'a> {
         Ok(())
     }
 
+    /// The translation currently flagged as the default, if any.
+    pub fn default_translation(&self) -> Result<Option<Translation>, AppError> {
+        self.conn
+            .query_row(
+                "SELECT id, name, language, abbreviation, is_default, created_at
+                 FROM translations WHERE is_default = 1 LIMIT 1",
+                [],
+                |row| {
+                    Ok(Translation {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        language: row.get(2)?,
+                        abbreviation: row.get(3)?,
+                        is_default: row.get::<_, i64>(4)? != 0,
+                        created_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
     pub fn set_default_translation(&self, id: &str) -> Result<(), AppError> {
         let affected = self
             .conn

@@ -55,7 +55,9 @@ const BUNDLED: [Bundled; 3] = [
 /// skipped rather than aborting start-up — the rest of the app still works.
 pub fn seed_bundled_translations(conn: &Connection, dir: &Path) -> Result<usize, AppError> {
     let repo = BibleRepository::new(conn);
-    let already_has_translations = !repo.list_translations()?.is_empty();
+    // A translation is only auto-chosen when nothing is flagged default yet,
+    // so an operator's own choice is never overridden.
+    let already_has_default = repo.default_translation()?.is_some();
 
     let mut installed = 0usize;
     for bundled in BUNDLED {
@@ -72,9 +74,9 @@ pub fn seed_bundled_translations(conn: &Connection, dir: &Path) -> Result<usize,
             name: bundled.name.to_string(),
             language: "en".to_string(),
             abbreviation: Some(bundled.abbreviation.to_string()),
-            // Only the very first translation becomes the default, and only
-            // when the operator has not already chosen one.
-            is_default: !already_has_translations && installed == 0,
+            // The first bundled translation becomes the default, and only
+            // when nothing is default already.
+            is_default: !already_has_default && installed == 0,
         };
 
         match super::import::import_sqlite_translation(conn, &path, &info) {
