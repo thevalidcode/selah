@@ -1,9 +1,14 @@
 import { command } from "./client";
 import type {
   BibleBook,
+  BibleSearchResult,
+  CatalogueEntry,
+  CustomVerseImportResult,
   Passage,
+  SaveCustomVersesRequest,
+  TopicSuggestion,
+  Translation,
   TranslationStatus,
-  Verse,
 } from "../../types";
 
 export function listBibleTranslations(): Promise<TranslationStatus[]> {
@@ -35,15 +40,104 @@ export function getPassage(request: PassageRequest): Promise<Passage> {
 }
 
 export function searchBible(
-  translationId: string,
+  translationId: string | null | undefined,
   query: string,
   limit = 25,
-): Promise<Verse[]> {
-  return command<Verse[]>("search_bible", { translationId, query, limit });
+): Promise<BibleSearchResult> {
+  return command<BibleSearchResult>("search_bible", {
+    // `null` searches every installed translation, so an operator who cannot
+    // remember which version a phrase came from still finds it.
+    translationId: translationId ?? null,
+    query,
+    limit,
+  });
+}
+
+/** Themes to offer when a search finds nothing (references only). */
+export function suggestBibleTopics(
+  query: string,
+  limit = 6,
+): Promise<TopicSuggestion[]> {
+  return command<TopicSuggestion[]>("suggest_bible_topics", { query, limit });
+}
+
+/**
+ * Saves verses the operator typed or pasted.
+ *
+ * The backend checks every reference against the canonical book registry and
+ * rejects mixed books/chapters, so a bad paste is reported rather than stored.
+ */
+export function saveCustomVerses(
+  request: SaveCustomVersesRequest,
+): Promise<CustomVerseImportResult> {
+  return command<CustomVerseImportResult>("save_custom_verses", {
+    request: {
+      translationId: request.translationId ?? null,
+      name: request.name ?? null,
+      abbreviation: request.abbreviation ?? null,
+      verses: request.verses,
+    },
+  });
 }
 
 export function setDefaultTranslation(translationId: string): Promise<void> {
   return command<void>("set_default_translation", { translationId });
+}
+
+// ------------------------------------------------- managing translations
+
+/**
+ * Every published translation Selah knows about, merged with what is installed.
+ *
+ * Metadata only: this is the "Add a Translation" list. Nothing is downloaded,
+ * and adding one creates the translation so verses can be stored under it.
+ */
+export function listTranslationCatalogue(): Promise<CatalogueEntry[]> {
+  return command<CatalogueEntry[]>("list_translation_catalogue");
+}
+
+/**
+ * Adds a translation so verses can be kept under it.
+ *
+ * A published id (`msg`) brings its own name, abbreviation and language; a
+ * translation Selah does not know needs a name of its own.
+ */
+export function addTranslation(request: {
+  id: string;
+  name?: string;
+  abbreviation?: string;
+  language?: string;
+}): Promise<TranslationStatus> {
+  return command<TranslationStatus>("add_translation", {
+    request: {
+      id: request.id,
+      name: request.name ?? null,
+      abbreviation: request.abbreviation ?? null,
+      language: request.language ?? null,
+    },
+  });
+}
+
+/** Renames a translation the operator added. Selah's own three are refused. */
+export function updateTranslation(request: {
+  id: string;
+  name: string;
+  abbreviation?: string;
+  language?: string;
+}): Promise<Translation> {
+  return command<Translation>("update_translation", {
+    request: {
+      id: request.id,
+      name: request.name,
+      abbreviation: request.abbreviation ?? null,
+      language: request.language ?? null,
+    },
+  });
+}
+
+/** Removes a translation and every verse stored under it. */
+export function deleteTranslation(id: string): Promise<void> {
+  return command<void>("delete_translation", { id });
 }
 
 /** Result of importing a translation document. */

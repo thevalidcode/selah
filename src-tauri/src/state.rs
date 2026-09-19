@@ -24,6 +24,9 @@ pub struct AppState {
     pub presentation: PresentationEngine,
     pub display: DisplayManager,
     pub settings: Mutex<AppSettings>,
+    /// What the projector says it is playing, so the Media screen can show
+    /// "playing" and offer start/stop without guessing.
+    pub media_playback: Mutex<crate::events::MediaPlaybackState>,
     pub paths: AppPaths,
 }
 
@@ -95,6 +98,20 @@ impl AppState {
             }
         }
 
+        // A branding logo has to be readable by the projector window too, and
+        // it lives outside the media folder. Re-grant it on every start so
+        // branding survives a restart without re-picking the file.
+        if let Some(logo) = settings.presentation.branding.logo.clone() {
+            let path = std::path::PathBuf::from(&logo);
+            match crate::media::grant_file(app, &path) {
+                Ok(()) => tracing::info!(logo = %logo, "branding logo opened"),
+                Err(err) => tracing::warn!(
+                    error = %err,
+                    "branding logo could not be opened; it can be chosen again in Settings"
+                ),
+            }
+        }
+
         let audio = AudioManager::default();
         let recognizer_kind = settings.speech.recognizer;
         let recognizer = crate::speech::recognizer::recognizer_for(recognizer_kind);
@@ -160,6 +177,7 @@ impl AppState {
             presentation: PresentationEngine::new(),
             display: DisplayManager::new(app.clone()),
             settings: Mutex::new(settings),
+            media_playback: Mutex::new(crate::events::MediaPlaybackState::default()),
             paths,
         };
 
@@ -214,7 +232,17 @@ impl AppState {
             .map(|s| s.presentation.fullscreen)
             .unwrap_or(true);
         self.display.ensure_open(app, fullscreen)?;
-        self.presentation.project(item, &self.display, app)
+        self.presentation
+            .project(item.clone(), &self.display, app)?;
+
+        // A new item means whatever was playing has gone: reset the playback
+        // picture so the Media screen never shows "playing" for a video that is
+        // no longer on the screen. The projector window reports the real state
+        // as soon as it has loaded the file.
+        if let Ok(mut playback) = self.media_playback.lock() {
+            *playback = crate::events::MediaPlaybackState::for_item(Some(item.id));
+        }
+        Ok(())
     }
 
     /// Pushes the saved projector settings at the live presentation window.

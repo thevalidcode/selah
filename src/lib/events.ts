@@ -11,6 +11,8 @@ import { useEffect, useRef } from "react";
 import type {
   AudioCaptureState,
   DetectionEvent,
+  MediaPlaybackCommand,
+  MediaPlaybackState,
   PresentationChangedEvent,
   PresentationDisplayEvent,
   PresentationItem,
@@ -31,6 +33,8 @@ export const EVENTS = {
   presentationSettings: "presentation://settings",
   presentationDisplayOpened: "presentation://display-opened",
   presentationDisplayClosed: "presentation://display-closed",
+  mediaPlayback: "media://playback",
+  mediaPlaybackState: "media://playback-state",
 } as const;
 
 export type EventMap = {
@@ -45,6 +49,8 @@ export type EventMap = {
   [EVENTS.presentationSettings]: PresentationSettingsEvent;
   [EVENTS.presentationDisplayOpened]: PresentationDisplayEvent;
   [EVENTS.presentationDisplayClosed]: PresentationDisplayEvent;
+  [EVENTS.mediaPlayback]: MediaPlaybackCommand;
+  [EVENTS.mediaPlaybackState]: MediaPlaybackState;
 };
 
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS];

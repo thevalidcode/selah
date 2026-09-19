@@ -65,6 +65,12 @@ pub fn seed_bundled_translations(conn: &Connection, dir: &Path) -> Result<usize,
         if !path.is_file() {
             continue;
         }
+
+        // Mark it even when it is already installed: a database written before
+        // the `builtin` column existed repairs itself on the next start, so the
+        // three Bibles Selah owns can never be renamed away.
+        repo.mark_builtin(bundled.id)?;
+
         if repo.get_translation(bundled.id)?.is_some() {
             continue;
         }

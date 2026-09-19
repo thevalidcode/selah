@@ -53,7 +53,7 @@ impl Database {
     pub fn default_translation(&self) -> Result<Option<Translation>, AppError> {
         self.with_conn(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, name, language, abbreviation, is_default, created_at
+                "SELECT id, name, language, abbreviation, is_default, created_at, builtin, origin
                  FROM translations WHERE is_default = 1 LIMIT 1",
             )?;
             let mut rows = stmt.query_map([], row_to_translation)?;
@@ -102,5 +102,7 @@ fn row_to_translation(row: &rusqlite::Row<'_>) -> rusqlite::Result<Translation> 
         abbreviation: row.get(3)?,
         is_default: row.get::<_, i64>(4)? != 0,
         created_at: row.get(5)?,
+        builtin: row.get::<_, i64>(6)? != 0,
+        origin: row.get(7)?,
     })
 }

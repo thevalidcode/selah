@@ -401,11 +401,55 @@ mod tests {
         import_sqlite_translation(&conn, &source, &translation("web", true)).unwrap();
 
         let hits = BibleRepository::new(&conn)
-            .search("web", "shepherd", 10)
+            .search(Some("web"), &fts_terms("shepherd"), 10)
             .unwrap();
         assert_eq!(hits.len(), 1);
         assert!(hits[0].text.contains("shepherd"));
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn search_can_span_every_translation() {
+        // An operator who cannot remember which version a phrase came from
+        // should still find it: `None` searches all translations at once.
+        let dir = scratch("search-all");
+        let kjv = write_source(
+            &dir,
+            "kjv.sqlite",
+            &[(19, 23, 1, "The LORD is my shepherd")],
+        );
+        let web = write_source(
+            &dir,
+            "web.sqlite",
+            &[(19, 23, 1, "The Lord is my shepherd")],
+        );
+
+        let conn = memory_db();
+        import_sqlite_translation(&conn, &kjv, &translation("kjv", false)).unwrap();
+        import_sqlite_translation(&conn, &web, &translation("web", true)).unwrap();
+
+        let repo = BibleRepository::new(&conn);
+        let terms = fts_terms("shepherd");
+
+        // Scoped to one translation.
+        assert_eq!(repo.search(Some("kjv"), &terms, 10).unwrap().len(), 1);
+        // Every translation, and each hit keeps its own translation id.
+        let anywhere = repo.search(None, &terms, 10).unwrap();
+        assert_eq!(anywhere.len(), 2);
+        let mut ids: Vec<&str> = anywhere.iter().map(|v| v.translation_id.as_str()).collect();
+        ids.sort_unstable();
+        assert_eq!(ids, vec!["kjv", "web"]);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The same FTS5 expression the search command builds.
+    fn fts_terms(query: &str) -> String {
+        query
+            .split_whitespace()
+            .map(|word| format!("\"{}\"", word.to_lowercase()))
+            .collect::<Vec<_>>()
+            .join(" AND ")
     }
 }

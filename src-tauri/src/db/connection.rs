@@ -22,6 +22,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "songs_and_media",
         sql: include_str!("../../migrations/0003_songs_and_media.sql"),
     },
+    Migration {
+        version: 4,
+        name: "translations_and_playback",
+        sql: include_str!("../../migrations/0004_translations_and_playback.sql"),
+    },
 ];
 
 /// A single ordered schema migration.

@@ -6,7 +6,7 @@
 
 use serde::Deserialize;
 use std::path::PathBuf;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::errors::{AppError, CommandResult};
 use crate::media::{DirectoryListing, MediaItem, MediaLibrary, MediaScan};
@@ -154,4 +154,178 @@ pub fn project_media(
     let item = PresentationItem::media(title, request.path, Some(kind.to_string()), caption);
     state.project(item, &app)?;
     Ok(state.presentation.state())
+}
+
+// ---------------------------------------------------------
+// Playback control (videos, and music)
+// ---------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaybackRequest {
+    /// `play`, `pause`, `restart` or `stop`.
+    pub action: String,
+}
+
+/// The last known playback state, for a screen that has just opened.
+#[tauri::command]
+pub fn get_media_playback_state(state: State<'_, AppState>) -> CommandResult<PlaybackSnapshot> {
+    Ok(snapshot(&state))
+}
+
+/// Tells the projector window to play, pause, restart or stop what is on it.
+///
+/// The action is sent as an event rather than a direct call because the
+/// projector is a separate webview — only it can touch the `<video>` element.
+/// The action names the item it is for, so a button pressed a moment too late
+/// cannot affect the next file.
+#[tauri::command]
+pub fn control_media_playback(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: PlaybackRequest,
+) -> CommandResult<PlaybackSnapshot> {
+    let action = crate::events::PlaybackAction::parse(&request.action).ok_or_else(|| {
+        AppError::InvalidConfiguration(format!(
+            "{} is not something a player can do (try play, pause, restart or stop)",
+            request.action
+        ))
+    })?;
+
+    let item_id = state.presentation.state().current.map(|item| item.id);
+
+    if item_id.is_none() {
+        return Err(AppError::Presentation(
+            "nothing is on the screen to play".to_string(),
+        ));
+    }
+
+    if let Err(err) = app.emit(
+        crate::events::MEDIA_PLAYBACK,
+        crate::events::MediaPlaybackCommand {
+            action,
+            item_id: item_id.clone(),
+        },
+    ) {
+        tracing::warn!(error = %err, "could not reach the projector about playback");
+    }
+
+    // Optimistically update the held state so the button responds immediately;
+    // the projector's report replaces it with the truth in a moment.
+    if let Ok(mut playback) = state.media_playback.lock() {
+        if playback.item_id == item_id {
+            match action {
+                crate::events::PlaybackAction::Play => playback.playing = true,
+                crate::events::PlaybackAction::Pause => playback.playing = false,
+                crate::events::PlaybackAction::Restart => {
+                    playback.playing = true;
+                    playback.position_ms = 0;
+                    playback.ended = false;
+                }
+                crate::events::PlaybackAction::Stop => {
+                    playback.playing = false;
+                    playback.position_ms = 0;
+                    playback.ended = false;
+                }
+            }
+        }
+    }
+
+    Ok(snapshot(&state))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaybackReport {
+    pub playing: bool,
+    #[serde(default)]
+    pub position_ms: u64,
+    #[serde(default)]
+    pub duration_ms: u64,
+    #[serde(default)]
+    pub ended: bool,
+}
+
+/// Where the operator screen reads playback from.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaybackSnapshot {
+    /// The item on screen, if any.
+    pub item_id: Option<String>,
+    /// True when that item is a picture or a video (music has no picture).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media_kind: Option<String>,
+    pub playing: bool,
+    pub position_ms: u64,
+    pub duration_ms: u64,
+    pub ended: bool,
+}
+
+/// Called by the projector window with what its player is actually doing.
+///
+/// This is the only trustworthy source for "is it playing": the operator screen
+/// cannot see the congregation's screen, so it is told rather than guessing.
+#[tauri::command]
+pub fn report_media_playback(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    report: PlaybackReport,
+) -> CommandResult<PlaybackSnapshot> {
+    let current = state.presentation.state().current;
+
+    if let Ok(mut playback) = state.media_playback.lock() {
+        // Only accept a report about the item that is really on screen, so a
+        // late report from a file that has been replaced cannot flip the badge.
+        if current
+            .as_ref()
+            .is_some_and(|item| playback.describes(&item.id))
+        {
+            playback.playing = report.playing;
+            playback.position_ms = report.position_ms;
+            playback.duration_ms = report.duration_ms;
+            playback.ended = report.ended;
+        }
+    }
+
+    let snapshot = snapshot(&state);
+    if let Err(err) = app.emit(crate::events::MEDIA_PLAYBACK_STATE, &snapshot) {
+        tracing::debug!(error = %err, "no listener for the playback report");
+    }
+    Ok(snapshot)
+}
+
+/// Builds the snapshot the Media screen renders.
+fn snapshot(state: &AppState) -> PlaybackSnapshot {
+    let current = state.presentation.state().current;
+    let media_kind = current.as_ref().and_then(|item| match &item.payload {
+        crate::models::presentation::ContentPayload::Media { media_kind, .. } => media_kind.clone(),
+        _ => None,
+    });
+
+    let playback = state
+        .media_playback
+        .lock()
+        .map(|playback| playback.clone())
+        .unwrap_or_default();
+
+    let describes_current = current
+        .as_ref()
+        .is_some_and(|item| playback.describes(&item.id));
+
+    PlaybackSnapshot {
+        item_id: current.map(|item| item.id),
+        media_kind,
+        playing: describes_current && playback.playing,
+        position_ms: if describes_current {
+            playback.position_ms
+        } else {
+            0
+        },
+        duration_ms: if describes_current {
+            playback.duration_ms
+        } else {
+            0
+        },
+        ended: describes_current && playback.ended,
+    }
 }

@@ -12,6 +12,18 @@ pub struct Translation {
     pub abbreviation: Option<String>,
     pub is_default: bool,
     pub created_at: String,
+    /// True for the translations Selah ships (WEB, KJV, ASV). They may not be
+    /// renamed or removed: the application can always rely on them being there.
+    #[serde(default)]
+    pub builtin: bool,
+    /// Where the translation came from: `bundled`, `catalogue` or `operator`.
+    #[serde(default = "default_origin")]
+    pub origin: String,
+}
+
+/// Origin used for translations written before the column existed.
+fn default_origin() -> String {
+    "operator".to_string()
 }
 
 /// A Bible book row mirrored from the canonical registry.

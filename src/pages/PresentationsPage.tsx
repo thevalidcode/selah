@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { presentationApi } from "@/lib/api";
+import { editingItemFrom, type EditingItem } from "@/lib/presentations";
 import type { Presentation } from "@/types";
 
 /**
@@ -24,6 +25,7 @@ export default function PresentationsPage() {
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<EditingItem | null>(null);
 
   const reload = useCallback(() => {
     presentationApi
@@ -51,6 +53,8 @@ export default function PresentationsPage() {
     } else {
       setSelected(null);
     }
+    // Editing an item in one presentation must never leak into another.
+    setEditing(null);
   }, [selectedId, refreshSelected]);
 
   async function create() {
@@ -172,9 +176,16 @@ export default function PresentationsPage() {
           <PresentationItemsPanel
             presentation={selected}
             busy={busy}
+            editingItemId={editing?.id}
             onDelete={() => {
               if (selected) {
                 void remove(selected.id);
+              }
+            }}
+            onEditItem={(itemId) => {
+              const record = selected?.items?.find((item) => item.id === itemId);
+              if (record) {
+                setEditing(editingItemFrom(record));
               }
             }}
             onRemoveItem={async (itemId) => {
@@ -182,6 +193,9 @@ export default function PresentationsPage() {
                 return;
               }
               await presentationApi.removePresentationItem(selected.id, itemId);
+              // Removing the item being edited closes the editor: there is
+              // nothing left to save into.
+              setEditing((current) => (current?.id === itemId ? null : current));
               await refreshSelected(selected.id);
             }}
             onShowItem={(itemId) =>
@@ -201,11 +215,13 @@ export default function PresentationsPage() {
           <AddItemPanel
             presentationId={selected?.id}
             busy={busy}
+            editing={editing}
             onAdded={() => {
               if (selected) {
                 void refreshSelected(selected.id);
               }
             }}
+            onCancelEdit={() => setEditing(null)}
             onError={setError}
           />
         </div>

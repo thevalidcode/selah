@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  ClipboardPaste,
   MonitorPlay,
   Music,
   Plus,
@@ -20,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { presentationApi, songsApi } from "@/lib/api";
 import { EVENTS, useTauriEvent } from "@/lib/events";
+import { splitIntoVerses } from "@/lib/songs";
 import type { PresentationItem, Song, SongInput } from "@/types";
 
 /** A song being edited. Sections carry no id: the store assigns those. */
@@ -399,6 +401,27 @@ function SongEditor({
     (section) => section.text.trim().length > 0,
   ).length;
 
+  // Pasting is a separate little flow: paste → see how it will be cut → keep
+  // it. Nothing touches the song until "Use these verses" is pressed.
+  const [pasting, setPasting] = useState(false);
+  const [pasted, setPasted] = useState("");
+  const preview = useMemo(() => splitIntoVerses(pasted), [pasted]);
+
+  function usePastedVerses() {
+    if (preview.length === 0) {
+      return;
+    }
+    onDraft({
+      ...draft,
+      sections: preview.map((verse) => ({
+        label: verse.label,
+        text: verse.text,
+      })),
+    });
+    setPasted("");
+    setPasting(false);
+  }
+
   return (
     <Panel
       title={draft.id ? draft.title || "Untitled song" : "New song"}
@@ -516,6 +539,100 @@ function SongEditor({
           <p className="text-xs text-muted-foreground">
             Save the song before showing it on the screen.
           </p>
+        </div>
+
+        <div className="rounded-md border border-border/60 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium">Paste words instead</p>
+              <p className="text-xs text-muted-foreground">
+                Paste one long block — a whole song or a paragraph — and Selah
+                cuts it into verses for you.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => setPasting((open) => !open)}
+            >
+              <ClipboardPaste className="size-3.5" />
+              {pasting ? "Close" : "Paste words"}
+            </Button>
+          </div>
+
+          {pasting ? (
+            <div className="mt-3 space-y-3">
+              <Textarea
+                value={pasted}
+                onChange={(event) => setPasted(event.target.value)}
+                placeholder={
+                  "Amazing grace how sweet the sound\nThat saved a wretch like me…"
+                }
+                aria-label="Paste the song words"
+                className="min-h-32 font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Numbered lines (1., 2., [3]), blank lines, one verse per line,
+                and sentences in a single long paragraph are all understood.
+              </p>
+
+              {preview.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nothing pasted yet.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    This will replace the sections above with{" "}
+                    <span className="font-medium text-foreground">
+                      {preview.length} verse
+                      {preview.length === 1 ? "" : "s"}
+                    </span>
+                    :
+                  </p>
+                  <ScrollArea className="max-h-40 rounded-md border border-border/60">
+                    <ul className="space-y-1.5 p-2.5">
+                      {preview.map((verse) => (
+                        <li key={verse.label} className="flex gap-2 text-xs">
+                          <span className="w-16 shrink-0 text-muted-foreground">
+                            {verse.label}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            {verse.text.length > 140
+                              ? `${verse.text.slice(0, 140)}…`
+                              : verse.text}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {verse.text.length}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                </>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="success"
+                  size="sm"
+                  disabled={busy || preview.length === 0}
+                  onClick={usePastedVerses}
+                >
+                  Use these {preview.length || ""} verses
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy || pasted.length === 0}
+                  onClick={() => setPasted("")}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </Panel>

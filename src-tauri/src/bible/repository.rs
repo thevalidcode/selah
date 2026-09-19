@@ -64,8 +64,8 @@ impl<'a> BibleRepository<'a> {
 
     pub fn list_translations(&self) -> Result<Vec<Translation>, AppError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, language, abbreviation, is_default, created_at
-             FROM translations ORDER BY is_default DESC, name",
+            "SELECT id, name, language, abbreviation, is_default, created_at, builtin, origin
+             FROM translations ORDER BY builtin DESC, is_default DESC, name",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(Translation {
@@ -75,6 +75,8 @@ impl<'a> BibleRepository<'a> {
                 abbreviation: row.get(3)?,
                 is_default: row.get::<_, i64>(4)? != 0,
                 created_at: row.get(5)?,
+                builtin: row.get::<_, i64>(6)? != 0,
+                origin: row.get(7)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
@@ -83,7 +85,7 @@ impl<'a> BibleRepository<'a> {
     pub fn get_translation(&self, id: &str) -> Result<Option<Translation>, AppError> {
         self.conn
             .query_row(
-                "SELECT id, name, language, abbreviation, is_default, created_at
+                "SELECT id, name, language, abbreviation, is_default, created_at, builtin, origin
                  FROM translations WHERE id = ?1",
                 [id],
                 |row| {
@@ -94,6 +96,8 @@ impl<'a> BibleRepository<'a> {
                         abbreviation: row.get(3)?,
                         is_default: row.get::<_, i64>(4)? != 0,
                         created_at: row.get(5)?,
+                        builtin: row.get::<_, i64>(6)? != 0,
+                        origin: row.get(7)?,
                     })
                 },
             )
@@ -102,10 +106,24 @@ impl<'a> BibleRepository<'a> {
     }
 
     /// Registers translation metadata. Does not require verse data yet.
+    ///
+    /// New translations always land as editable (`builtin = 0`): only
+    /// [`Self::mark_builtin`] may promote one to read-only, and only the
+    /// seeding path calls it.
     pub fn upsert_translation(&self, info: &TranslationInfo) -> Result<(), AppError> {
+        self.insert_translation(info, "operator")
+    }
+
+    /// Registers a translation that came from the published catalogue.
+    pub fn add_catalogue_translation(&self, info: &TranslationInfo) -> Result<(), AppError> {
+        self.insert_translation(info, "catalogue")
+    }
+
+    /// The shared insert used by every path that creates a translation.
+    fn insert_translation(&self, info: &TranslationInfo, origin: &str) -> Result<(), AppError> {
         self.conn.execute(
-            "INSERT INTO translations (id, name, language, abbreviation, is_default, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "INSERT INTO translations (id, name, language, abbreviation, is_default, created_at, builtin, origin)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)
              ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 language = excluded.language,
@@ -117,7 +135,8 @@ impl<'a> BibleRepository<'a> {
                 info.language,
                 info.abbreviation,
                 info.is_default as i64,
-                Utc::now().to_rfc3339()
+                Utc::now().to_rfc3339(),
+                origin
             ],
         )?;
 
@@ -130,11 +149,86 @@ impl<'a> BibleRepository<'a> {
         Ok(())
     }
 
+    /// Marks a translation as one of Selah's own, which makes it read-only.
+    ///
+    /// Called for every bundled translation on start-up, so a database written
+    /// before the flag existed repairs itself.
+    pub fn mark_builtin(&self, id: &str) -> Result<(), AppError> {
+        self.conn.execute(
+            "UPDATE translations SET builtin = 1, origin = 'bundled' WHERE id = ?1",
+            [id],
+        )?;
+        Ok(())
+    }
+
+    /// Renames a translation, or changes the details shown in the picker.
+    ///
+    /// The three translations Selah ships may not be renamed: they are the ones
+    /// the application can always rely on being present and correctly named.
+    pub fn rename_translation(
+        &self,
+        id: &str,
+        name: &str,
+        abbreviation: Option<&str>,
+        language: &str,
+    ) -> Result<(), AppError> {
+        let existing = self
+            .get_translation(id)?
+            .ok_or_else(|| AppError::BibleTranslationNotFound(id.to_string()))?;
+
+        if existing.builtin {
+            return Err(AppError::InvalidConfiguration(format!(
+                "{} is one of the Bibles that come with Selah, so it cannot be renamed",
+                existing.name
+            )));
+        }
+
+        self.conn.execute(
+            "UPDATE translations SET name = ?1, abbreviation = ?2, language = ?3 WHERE id = ?4",
+            params![name, abbreviation, language, id],
+        )?;
+        Ok(())
+    }
+
+    /// Removes a translation and every verse stored under it.
+    ///
+    /// Verses go with it through the schema's cascade. The bundled translations
+    /// cannot be removed, and removing the default hands the default flag to
+    /// another installed translation so the Bible screen always has one to
+    /// open on.
+    pub fn delete_translation(&self, id: &str) -> Result<(), AppError> {
+        let existing = self
+            .get_translation(id)?
+            .ok_or_else(|| AppError::BibleTranslationNotFound(id.to_string()))?;
+
+        if existing.builtin {
+            return Err(AppError::InvalidConfiguration(format!(
+                "{} is one of the Bibles that come with Selah, so it cannot be removed",
+                existing.name
+            )));
+        }
+
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM translations WHERE id = ?1", [id])?;
+
+        if existing.is_default {
+            // Hand the default to something that is still installed, rather
+            // than leaving the interface with nothing selected.
+            tx.execute(
+                "UPDATE translations SET is_default = 1
+                 WHERE id = (SELECT id FROM translations ORDER BY builtin DESC, name LIMIT 1)",
+                [],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// The translation currently flagged as the default, if any.
     pub fn default_translation(&self) -> Result<Option<Translation>, AppError> {
         self.conn
             .query_row(
-                "SELECT id, name, language, abbreviation, is_default, created_at
+                "SELECT id, name, language, abbreviation, is_default, created_at, builtin, origin
                  FROM translations WHERE is_default = 1 LIMIT 1",
                 [],
                 |row| {
@@ -145,6 +239,8 @@ impl<'a> BibleRepository<'a> {
                         abbreviation: row.get(3)?,
                         is_default: row.get::<_, i64>(4)? != 0,
                         created_at: row.get(5)?,
+                        builtin: row.get::<_, i64>(6)? != 0,
+                        origin: row.get(7)?,
                     })
                 },
             )
@@ -265,24 +361,49 @@ impl<'a> BibleRepository<'a> {
     }
 
     /// Full-text search against the automatically-synced FTS5 index.
+    ///
+    /// When `translation_id` is `None` the search runs across **every**
+    /// translation, so an operator who does not remember which version a phrase
+    /// came from still finds it. Results keep their `translation_id`, so the
+    /// interface can say which version each match came from.
     pub fn search(
         &self,
-        translation_id: &str,
+        translation_id: Option<&str>,
         query: &str,
         limit: usize,
     ) -> Result<Vec<Verse>, AppError> {
         let limit = limit.clamp(1, 200) as i64;
-        let mut stmt = self.conn.prepare(
-            "SELECT verses.translation_id, verses.book_id, verses.chapter, verses.verse, verses.text
-             FROM verses_fts
-             JOIN verses
-               ON verses.rowid = verses_fts.rowid
-              AND verses.translation_id = verses_fts.translation_id
-             WHERE verses_fts.translation_id = ?1 AND verses_fts MATCH ?2
-             LIMIT ?3",
-        )?;
-        let rows = stmt.query_map(params![translation_id, query, limit], map_verse)?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        let statement = match translation_id {
+            Some(_) => {
+                "SELECT verses.translation_id, verses.book_id, verses.chapter, verses.verse, verses.text
+                 FROM verses_fts
+                 JOIN verses
+                   ON verses.rowid = verses_fts.rowid
+                  AND verses.translation_id = verses_fts.translation_id
+                 WHERE verses_fts.translation_id = ?1 AND verses_fts MATCH ?2
+                 LIMIT ?3"
+            }
+            None => {
+                "SELECT verses.translation_id, verses.book_id, verses.chapter, verses.verse, verses.text
+                 FROM verses_fts
+                 JOIN verses
+                   ON verses.rowid = verses_fts.rowid
+                  AND verses.translation_id = verses_fts.translation_id
+                 WHERE verses_fts MATCH ?1
+                 LIMIT ?2"
+            }
+        };
+        let mut stmt = self.conn.prepare(statement)?;
+
+        let rows = match translation_id {
+            Some(id) => stmt
+                .query_map(params![id, query, limit], map_verse)?
+                .collect::<Result<Vec<_>, _>>()?,
+            None => stmt
+                .query_map(params![query, limit], map_verse)?
+                .collect::<Result<Vec<_>, _>>()?,
+        };
+        Ok(rows)
     }
 
     /// Number of verses installed for a translation.
@@ -294,6 +415,30 @@ impl<'a> BibleRepository<'a> {
                 |row| row.get(0),
             )
             .map_err(Into::into)
+    }
+
+    /// Stores verses typed or pasted by the operator, in one transaction.
+    ///
+    /// This is the manual-entry path: the operator is responsible for the words,
+    /// Selah only checks that each verse names a real book, chapter and verse.
+    /// Existing rows for the same reference are replaced, so re-pasting a
+    /// corrected chapter updates it rather than doubling it.
+    pub fn save_verses(&self, info: &TranslationInfo, verses: &[Verse]) -> Result<usize, AppError> {
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            let repo = BibleRepository::new(&tx);
+            // The translation is created only when it is not there yet: adding
+            // verses to a Bible that is already installed must never rename it
+            // or change which one is the default.
+            if repo.get_translation(&info.id)?.is_none() {
+                repo.upsert_translation(info)?;
+            }
+            for verse in verses {
+                repo.insert_verse(verse)?;
+            }
+        }
+        tx.commit()?;
+        Ok(verses.len())
     }
 }
 
@@ -557,6 +702,41 @@ impl<'a> PresentationRepository<'a> {
                 item.payload
             ],
         )?;
+        tx.execute(
+            "UPDATE presentations SET updated_at = ?1 WHERE id = ?2",
+            params![Self::now(), presentation_id],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Replaces the payload of a stored item, keeping its type and position.
+    ///
+    /// Editing a saved presentation is the same idea as the original save: the
+    /// row's `payload` is the whole content, so replacing it is all that is
+    /// needed. The presentation's `updated_at` is bumped so the list shows the
+    /// edit.
+    pub fn update_item(
+        &self,
+        presentation_id: &str,
+        item_id: &str,
+        type_name: &str,
+        payload: &str,
+    ) -> Result<(), AppError> {
+        let tx = self.conn.unchecked_transaction()?;
+        let changed = tx.execute(
+            "UPDATE presentation_items
+             SET payload = ?1, type = ?2
+             WHERE id = ?3 AND presentation_id = ?4",
+            params![payload, type_name, item_id, presentation_id],
+        )?;
+
+        if changed == 0 {
+            return Err(AppError::Presentation(format!(
+                "item {item_id} is not part of presentation {presentation_id}"
+            )));
+        }
+
         tx.execute(
             "UPDATE presentations SET updated_at = ?1 WHERE id = ?2",
             params![Self::now(), presentation_id],

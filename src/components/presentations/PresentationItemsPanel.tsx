@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Play, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Play, Trash2 } from "lucide-react";
 
 import { EmptyHint, Panel } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { friendlyContentType } from "@/lib/content";
+import { summariseItem } from "@/lib/presentations";
 import type { Presentation } from "@/types";
 
 /**
@@ -18,12 +20,15 @@ import type { Presentation } from "@/types";
  *
  * The play buttons here are what actually put saved content on the screen:
  * saved rows are stored as JSON, so they have to be rebuilt into something
- * projectable before they can be shown.
+ * projectable before they can be shown. Edit puts one back into the composer
+ * without losing its place in the list.
  */
 export default function PresentationItemsPanel({
   presentation,
   busy,
+  editingItemId,
   onDelete,
+  onEditItem,
   onRemoveItem,
   onShowItem,
   onShowAll,
@@ -32,7 +37,10 @@ export default function PresentationItemsPanel({
 }: {
   presentation: Presentation | null;
   busy: boolean;
+  /** The row currently open in the composer, if any. */
+  editingItemId?: string;
   onDelete: () => void;
+  onEditItem: (itemId: string) => void;
   onRemoveItem: (itemId: string) => void | Promise<void>;
   onShowItem: (itemId: string) => void | Promise<void>;
   onShowAll: () => void | Promise<void>;
@@ -104,23 +112,44 @@ export default function PresentationItemsPanel({
           </TableHeader>
           <TableBody>
             {items.map((item) => (
-              <TableRow key={item.id}>
+              <TableRow
+                key={item.id}
+                className={editingItemId === item.id ? "bg-accent/60" : undefined}
+              >
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   {item.position}
                 </TableCell>
                 <TableCell>
-                  <Badge variant="muted">{item.typeName}</Badge>
+                  {/*
+                    Notices are labelled in their own colour: the whole point of
+                    the kind is that an operator can tell announcements from
+                    Bible verses at a glance.
+                  */}
+                  <Badge
+                    variant={item.typeName === "announcement" ? "warning" : "muted"}
+                  >
+                    {friendlyContentType(item.typeName)}
+                  </Badge>
                 </TableCell>
                 <TableCell className="max-w-md">
                   <span className="block truncate text-sm">
-                    {describePayload(item.payload).heading}
+                    {summariseItem(item.payload).heading}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {describePayload(item.payload).detail}
+                    {summariseItem(item.payload).detail}
                   </span>
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Edit this item"
+                      disabled={busy}
+                      onClick={() => onEditItem(item.id)}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -148,30 +177,4 @@ export default function PresentationItemsPanel({
       )}
     </Panel>
   );
-}
-
-/**
- * A readable summary of a stored item.
- *
- * Items are stored as JSON so new content kinds never need a schema change.
- * Showing the raw JSON in the list made the heading the operator typed
- * invisible, so it is unpacked here instead.
- */
-function describePayload(payload: string): { heading: string; detail: string } {
-  try {
-    const parsed = JSON.parse(payload) as Record<string, unknown>;
-    const text = (value: unknown) =>
-      typeof value === "string" ? value.trim() : "";
-
-    const heading =
-      text(parsed.heading) || text(parsed.reference) || text(parsed.title);
-    const detail = text(parsed.text) || text(parsed.path) || payload;
-
-    return {
-      heading: heading || "No heading",
-      detail: detail.replace(/\s+/g, " ").slice(0, 120),
-    };
-  } catch {
-    return { heading: "Unreadable item", detail: payload.slice(0, 120) };
-  }
 }

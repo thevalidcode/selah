@@ -29,9 +29,24 @@ export function projectText(
   });
 }
 
-/** Projects an already-resolved passage from the Bible repository. */
-export function projectPassage(passage: Passage): Promise<PresentationState> {
-  return command<PresentationState>("project_passage", { passage });
+/**
+ * Projects an already-resolved passage from the Bible repository.
+ *
+ * `headingSize` and `textSize` are optional per-passage overrides in CSS
+ * pixels, set from the Bible screen. Omitting them keeps whatever the operator
+ * saved in Settings.
+ */
+export function projectPassage(
+  passage: Passage,
+  sizes?: { headingSize?: number; textSize?: number },
+): Promise<PresentationState> {
+  return command<PresentationState>("project_passage", {
+    request: {
+      passage,
+      headingSize: sizes?.headingSize ?? null,
+      textSize: sizes?.textSize ?? null,
+    },
+  });
 }
 
 export function clearPresentation(): Promise<PresentationState> {
@@ -94,6 +109,24 @@ export function addPresentationItem(
   return command<void>("add_presentation_item", {
     request: { presentationId, type, payload },
   });
+}
+
+/**
+ * Replaces the content of an item inside a saved presentation.
+ *
+ * The row keeps its place in the list; only its content changes, which is what
+ * makes the Edit button in the items table possible.
+ */
+export function updatePresentationItem(
+  request: {
+    presentationId: string;
+    itemId: string;
+    /** `text`, `scripture` or `announcement` — the projector styles by kind. */
+    type: string;
+    payload: string;
+  },
+): Promise<void> {
+  return command<void>("update_presentation_item", { request });
 }
 
 export function removePresentationItem(

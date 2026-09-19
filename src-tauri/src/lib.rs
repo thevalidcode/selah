@@ -37,10 +37,6 @@ pub fn run() {
 
     tauri::Builder::default()
         .setup(|app| {
-            // macOS: run as an "accessory" app — no Dock icon, tray-only.
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
             // Paths first: logging writes into `<AppData>/logs`.
             let paths = storage::AppPaths::init(app.handle())?;
             logging::init(&paths.logs_dir);

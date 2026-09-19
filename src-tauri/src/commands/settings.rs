@@ -49,6 +49,20 @@ pub fn update_settings(
         ..request.settings.clone()
     };
 
+    // A logo is a file like any other: the projector window may only read it
+    // once it has been granted, exactly like the media folder. A path that is
+    // gone is reported but must not block saving everything else.
+    if let Some(logo) = next.presentation.branding.logo.clone() {
+        let path = std::path::PathBuf::from(&logo);
+        match crate::media::grant_file(&app, &path) {
+            Ok(()) => tracing::info!(logo = %logo, "branding logo opened"),
+            Err(err) => tracing::warn!(
+                error = %err,
+                "branding logo could not be opened; it will not appear on screen"
+            ),
+        }
+    }
+
     // Apply speech changes to the live manager (recognizer swap / model load).
     state.speech.reconfigure(&next.speech)?;
 

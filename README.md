@@ -197,10 +197,12 @@ Detected scripture will appear in the review panel. Click Display to send the co
 
 ### A round trip you can demo
 
-1. **Songs** → write a title and two sections (label + words) → **Save** → **Show on screen**. Each section is one screen; **Next** / **Back** step through the song verse by verse.
-2. **Media** → **Choose folder…** → walk to the folder with your pictures and videos → **Read this folder** → **Show** on any file. Images and video take over the projector window; the folder you picked is the only one Selah may read.
-3. **Settings → Screen** → change the background colour, drag the text size, pick a typeface (each option is drawn in its own font) → **Save settings**. An already-open projector window updates immediately, and the "How it will look" panel previews the result.
-4. **Presentations** → add a heading and some words → **Show on screen**: the heading you typed appears above the words, and the item list shows it instead of raw JSON.
+1. **Songs** → write a title and two sections (label + words) → **Save** → **Show on screen**. Each section is one screen; **Next** / **Back** step through the song verse by verse. In a hurry? **Paste words** takes one long block — numbered lines, blank lines, one verse per line, or a single paragraph of sentences — shows how it will be cut into verses, then fills the sections for you.
+2. **Media** → **Choose folder…** → walk to the folder with your pictures and videos → **Read this folder** → **Show** on any file. Pictures and video are fitted inside the window rather than cropped, and the background colour fills the space around them; the folder you picked is the only one Selah may read. **On the screen now** tells you whether a video is really playing and gives you **Play**, **Pause**, **Start again** and **Stop** from the operator screen.
+3. **Settings → Screen** → change the background colour, drag the text size, pick a typeface (each option is drawn in its own font) → add your **logo and name**, choose which edge it hugs and how big it is → the "What the branding looks like" panel shows the actual image and the name in the chosen typeface at the chosen size, and **Save settings** makes it real on an already-open projector window.
+4. **Bible → Look up a verse** → the screen opens on chapter 1, verse 3. Change the **heading size** and **verse size** for this passage only and a warning appears if it will not fit the chosen screen. Search words across **every** installed Bible; if the words are not there you get the closest matches, or passages about the same subject to try instead.
+5. **Bible → Add a Translation** → the published Bibles are listed (NKJV, NIV, ESV, NASB, MSG, AMP, NLT, CSB, HCSB, NET, RSV, NRSV, GNT, CEV, TLB and more): press **Add** on one and it is created, ready for verses. Then store the words — switch on **Enter one verse** and type only the message (`Jesus wept.`; Selah refuses anything with the reference still attached), or switch on **Paste a whole chapter**, press **Copy the prompt** (it names the chapter *and* the translation), give it to an AI chat and paste the array back: every verse is checked before anything is saved. Anything you added can be renamed or removed on the same screen; the three Bibles Selah ships (WEB, KJV, ASV) are marked as its own and cannot be changed.
+6. **Presentations** → add an item of kind **Notice** and one of kind **Bible verse** → **Show on screen**: a notice is drawn as a card with a gold accent bar and its own colour, so the congregation can tell an announcement from Scripture at a glance. Use **Edit** on any row to change its words without moving it in the list.
 
 ## Technologies Used
 
@@ -651,15 +653,74 @@ The application backend uses Tauri IPC commands for communication with the front
 
 #### [IPC] search_bible
 
-**Description**: Performs a full-text search across the Bible translation index.
+**Description**: Searches verse text, optionally across **every** installed translation. When the exact words are not found the reply carries the closest matches (with `related: true`) or, if nothing is close at all, themes to try instead — so a search never dead-ends.
 
 **Request**:
 
 ```json
 {
-  "translationId": "web",
-  "query": "love",
+  "translationId": null,
+  "query": "shepherd",
   "limit": 25
+}
+```
+
+`translationId` may be a translation id (`"web"`), or `null` / `""` / `"*"` / `"@all"` to search every installed translation.
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "verses": [
+      {
+        "translationId": "kjv",
+        "bookId": 19,
+        "chapter": 23,
+        "verse": 1,
+        "text": "The LORD is my shepherd; I shall not want."
+      }
+    ],
+    "related": false,
+    "suggestions": []
+  }
+}
+```
+
+When nothing matches, `suggestions` carries references (never text — Selah ships no Bible text):
+
+```json
+{
+  "verses": [],
+  "related": false,
+  "suggestions": [
+    {
+      "topic": "Comfort",
+      "why": "comfort in trouble",
+      "bookId": 19,
+      "chapter": 23,
+      "verse": 1,
+      "reference": "Psalms 23:1"
+    }
+  ]
+}
+```
+
+**Errors**:
+
+- 500: Database error during search
+
+#### [IPC] suggest_bible_topics
+
+**Description**: Returns passages about the subject a query describes, for when an operator knows what they want to say but not where it is. References only.
+
+**Request**:
+
+```json
+{
+  "query": "worried about money",
+  "limit": 6
 }
 ```
 
@@ -670,11 +731,52 @@ The application backend uses Tauri IPC commands for communication with the front
   "status": "success",
   "data": [
     {
-      "translationId": "web",
-      "bookId": 43,
-      "chapter": 3,
-      "verse": 16,
-      "text": "For God so loved the world..."
+      "topic": "Money",
+      "why": "for giving, debt and worry about provision",
+      "bookId": 40,
+      "chapter": 6,
+      "verse": 33,
+      "reference": "Matthew 6:33"
+    }
+  ]
+}
+```
+
+**Errors**: none — an unrecognised query returns the starter passages rather than an error.
+
+#### [IPC] list_translation_catalogue
+
+**Description**: Every published Bible translation Selah knows how to hold (KJV, NKJV, ASV, WEB, RSV, NRSV, KJ21, NIV, ESV, NASB, MSG, AMP, NLT, CSB, HCSB, NET, GNT, CEV, TLB, NCV, GNB, ERV…), merged with what is installed. Metadata only — Selah never downloads or ships Bible text. Anything installed that is not in the list (imported from a file, or added by hand) is included as well.
+
+**Request**: none
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "msg",
+      "name": "The Message",
+      "abbreviation": "MSG",
+      "language": "en",
+      "group": "Modern",
+      "builtin": false,
+      "installed": false,
+      "verseCount": 0,
+      "publicDomain": false
+    },
+    {
+      "id": "kjv",
+      "name": "King James Version",
+      "abbreviation": "KJV",
+      "language": "en",
+      "group": "Classic",
+      "builtin": true,
+      "installed": true,
+      "verseCount": 31102,
+      "publicDomain": true
     }
   ]
 }
@@ -682,7 +784,154 @@ The application backend uses Tauri IPC commands for communication with the front
 
 **Errors**:
 
-- 500: Database error during search
+- 500: Database error reading the installed translations
+
+#### [IPC] add_translation
+
+**Description**: Adds a translation so verses can be kept under it. A published id (`msg`) brings its own name, abbreviation and language so the picker stays consistent; an id Selah does not list needs a `name`. The three Bibles Selah ships (`web`, `kjv`, `asv`) are refused — they are always present. A new translation never becomes the default.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "id": "msg",
+    "name": null,
+    "abbreviation": null,
+    "language": null
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "translation": {
+      "id": "msg",
+      "name": "The Message",
+      "language": "en",
+      "abbreviation": "MSG",
+      "isDefault": false,
+      "createdAt": "2026-09-19T06:40:00Z",
+      "builtin": false,
+      "origin": "catalogue"
+    },
+    "verseCount": 0
+  }
+}
+```
+
+**Errors**:
+
+- 400: the id is one of Selah's own, or a translation Selah does not list was added without a name
+- 500: Database error writing the translation
+
+#### [IPC] update_translation
+
+**Description**: Renames a translation the operator added, or changes the short name shown in the picker. The three bundled Bibles are refused: the application relies on their names.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "id": "msg",
+    "name": "The Message (paraphrase)",
+    "abbreviation": "MSG",
+    "language": "en"
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "msg",
+    "name": "The Message (paraphrase)",
+    "abbreviation": "MSG",
+    "builtin": false,
+    "origin": "catalogue"
+  }
+}
+```
+
+**Errors**:
+
+- 400: the name is empty, or the translation is one of Selah's own
+- 500: translation not found, or a database error
+
+#### [IPC] delete_translation
+
+**Description**: Removes a translation the operator added, along with every verse stored under it (the schema cascades). The three bundled Bibles are refused. If the translation was the default, the flag moves to another installed translation and `settings.general.defaultTranslationId` is cleared when it pointed at the removed one.
+
+**Request**:
+
+```json
+{
+  "id": "msg"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 400: the translation is one of Selah's own
+- 500: translation not found, or a database error
+
+
+**Description**: Stores verses the operator supplied under the translation they chose, which then behaves like any other Bible. Every reference is checked against the canonical book registry before anything is written: the book must exist, the chapter must exist in that book, all verses must belong to one book and one chapter, and verse numbers must be unique with real words in them. Writing into one of the three bundled Bibles is refused — add a translation of your own for verses you supply.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "translationId": "msg",
+    "name": null,
+    "abbreviation": null,
+    "verses": [
+      { "book": "John", "chapter": 3, "verse": 16, "text": "This is how much God loved the world" }
+    ]
+  }
+}
+```
+
+`name` is only used when the translation does not exist yet; adding verses to an installed translation never renames it.
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "translationId": "msg",
+    "reference": "John 3 (1 verses)",
+    "bookId": 43,
+    "chapter": 3,
+    "versesSaved": 1,
+    "missingVerses": []
+  }
+}
+```
+
+**Errors**:
+
+- 400: an unknown book, a chapter that does not exist, a paste mixing books or chapters, repeated verse numbers, empty words, code pasted where verse text belongs, or a bundled translation
+- 500: Database error while writing the verses
 
 #### [IPC] set_default_translation
 
@@ -811,17 +1060,21 @@ The application backend uses Tauri IPC commands for communication with the front
 
 #### [IPC] project_passage
 
-**Description**: Sends a Bible passage to the presentation display.
+**Description**: Sends a Bible passage to the presentation display. `headingSize` and `textSize` are optional per-passage overrides in CSS pixels, set from the Bible screen; omit them (or send `null`) to keep the sizes saved in Settings.
 
 **Request**:
 
 ```json
 {
-  "passage": {
-    "translationId": "web",
-    "reference": "John 3:16",
-    "verses": [],
-    "text": "For God so loved the world..."
+  "request": {
+    "passage": {
+      "translationId": "web",
+      "reference": "John 3:16",
+      "verses": [],
+      "text": "For God so loved the world..."
+    },
+    "headingSize": 120,
+    "textSize": 72
   }
 }
 ```
@@ -840,7 +1093,9 @@ The application backend uses Tauri IPC commands for communication with the front
         "kind": "scripture",
         "reference": "John 3:16",
         "translation": "web",
-        "text": "For God so loved the world..."
+        "text": "For God so loved the world...",
+        "headingSize": 120,
+        "textSize": 72
       }
     },
     "queue": [],
@@ -1173,6 +1428,37 @@ The application backend uses Tauri IPC commands for communication with the front
 
 - 500: Database error adding item
 
+#### [IPC] update_presentation_item
+
+**Description**: Replaces the content of an item already saved in a presentation, keeping its place in the list. This is what the Edit button in the items table uses. The payload is read back as a `ContentPayload` before it is stored, so a broken edit is refused rather than discovered later on the wall.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "presentationId": "pres_1",
+    "itemId": "item_1",
+    "type": "announcement",
+    "payload": "{\"kind\":\"text\",\"heading\":\"Notices\",\"text\":\"Tea after the service\"}"
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 400: the payload could not be read back, or an item with no words
+- 500: item not part of that presentation, or a database error
+
 #### [IPC] remove_presentation_item
 
 **Description**: Removes a specific item from a saved presentation.
@@ -1349,7 +1635,72 @@ The application backend uses Tauri IPC commands for communication with the front
 - 400: The file does not exist, or Selah cannot present that file type
 - 500: Presentation window could not be opened
 
-#### [IPC] import_media
+#### [IPC] get_media_playback_state
+
+**Description**: What the projector window says it is doing. Video and sound keep moving after they are on the screen, and only the projector knows whether they really started, so the operator screen reads the truth from here rather than guessing.
+
+**Request**: none
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "itemId": "8f1c…",
+    "mediaKind": "video",
+    "playing": true,
+    "positionMs": 12400,
+    "durationMs": 96000,
+    "ended": false
+  }
+}
+```
+
+**Errors**: none — an empty screen returns an empty snapshot.
+
+#### [IPC] control_media_playback
+
+**Description**: Asks the projector window to play, pause, restart or stop what is on it. The instruction travels as the `media://playback` event because the projector is a separate webview: only it can touch the `<video>` element. It names the item it is for, so a button pressed a moment too late cannot affect the next file.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "action": "pause"
+  }
+}
+```
+
+**Response**: the same shape as `get_media_playback_state`, already updated optimistically; the projector's own report replaces it a moment later.
+
+**Errors**:
+
+- 400: the action is not `play`, `pause`, `restart` or `stop`
+- 500: nothing is on the screen to play
+
+#### [IPC] report_media_playback
+
+**Description**: Called by the **projector window** — never by the operator screen — with what its player is actually doing. The state is stored and re-emitted on `media://playback-state`, so every open screen agrees. A report about an item that is no longer on the screen is ignored.
+
+**Request**:
+
+```json
+{
+  "report": {
+    "playing": true,
+    "positionMs": 12400,
+    "durationMs": 96000,
+    "ended": false
+  }
+}
+```
+
+**Response**: the stored snapshot, identical to `get_media_playback_state`.
+
+**Errors**: none — a report from a stale item is dropped rather than refused.
+
 
 **Description**: Registers a single local file (used for one-off files that live outside the chosen media folder).
 

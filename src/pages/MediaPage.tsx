@@ -7,7 +7,11 @@ import {
   FolderOpen,
   MonitorPlay,
   Music,
+  Pause,
+  Play,
   RefreshCw,
+  RotateCcw,
+  EyeOff,
   Trash2,
 } from "lucide-react";
 
@@ -24,11 +28,18 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { mediaApi } from "@/lib/api";
+import { mediaApi, presentationApi } from "@/lib/api";
 import { friendlyContentType } from "@/lib/content";
+import { EVENTS, useTauriEvent } from "@/lib/events";
 import { mediaUrl } from "@/lib/media";
-import type { DirectoryListing, MediaItem } from "@/types";
+import type {
+  DirectoryListing,
+  MediaItem,
+  MediaPlaybackState,
+  PresentationItem,
+} from "@/types";
 
 /**
  * Media library.
@@ -46,6 +57,74 @@ export default function MediaPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // What is on the congregation's screen, and (for a video or a piece of
+  // music) whether it is playing. Only the projector window knows that for
+  // certain, so it reports back over `media://playback-state`.
+  const [onScreen, setOnScreen] = useState<PresentationItem | null>(null);
+  const [playback, setPlayback] = useState<MediaPlaybackState>({
+    playing: false,
+    positionMs: 0,
+    durationMs: 0,
+    ended: false,
+  });
+
+  // The path of whatever is on the screen, so the library can mark it.
+  const onScreenPath =
+    onScreen?.payload.kind === "media" ? onScreen.payload.path : undefined;
+
+  useTauriEvent(EVENTS.presentationChanged, (payload) => {
+    setOnScreen(payload.item ?? null);
+  });
+
+  useTauriEvent(EVENTS.mediaPlaybackState, (payload) => setPlayback(payload));
+
+  // Closing the projector window takes everything off the screen, so the panel
+  // must not keep claiming something is showing.
+  useTauriEvent(EVENTS.presentationDisplayClosed, () => {
+    setOnScreen(null);
+    setPlayback({
+      playing: false,
+      positionMs: 0,
+      durationMs: 0,
+      ended: false,
+    });
+  });
+
+  useEffect(() => {
+    mediaApi
+      .getMediaPlaybackState()
+      .then(setPlayback)
+      .catch(() => undefined);
+  }, []);
+
+  /** Sends a play/pause/restart/stop instruction to the projector. */
+  const control = useCallback(
+    async (action: "play" | "pause" | "restart" | "stop") => {
+      setBusy(true);
+      try {
+        setPlayback(await mediaApi.controlMediaPlayback(action));
+        setError(null);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
+
+  async function hideScreen() {
+    setBusy(true);
+    try {
+      await presentationApi.clearPresentation();
+      setError(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const reload = useCallback(() => {
     mediaApi
@@ -130,6 +209,14 @@ export default function MediaPage() {
           {notice}
         </p>
       ) : null}
+
+      <OnScreenNow
+        item={onScreen}
+        playback={playback}
+        busy={busy}
+        onControl={(action) => void control(action)}
+        onHide={() => void hideScreen()}
+      />
 
       <Panel title="Folder to read from">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -219,9 +306,29 @@ export default function MediaPage() {
                       </p>
                     </div>
                     <div className="flex items-center justify-between gap-1">
-                      <Badge variant="muted">
-                        {friendlyContentType(item.kind)}
-                      </Badge>
+                      {onScreenPath === item.path ? (
+                        // The file that is actually on the congregation's screen
+                        // is marked here, and says so when it is playing.
+                        <Badge
+                          variant={
+                            item.kind === "image"
+                              ? "warning"
+                              : playback.playing
+                                ? "success"
+                                : "warning"
+                          }
+                        >
+                          {item.kind === "image"
+                            ? "on screen"
+                            : playback.playing
+                              ? "playing"
+                              : "on screen"}
+                        </Badge>
+                      ) : (
+                        <Badge variant="muted">
+                          {friendlyContentType(item.kind)}
+                        </Badge>
+                      )}
                       <div className="flex items-center gap-1">
                         <Button
                           variant="success"
@@ -392,6 +499,167 @@ function FolderPicker({
     </Dialog>
   );
 }
+
+/**
+ * What is on the congregation's screen, with playback control.
+ *
+ * A picture simply sits there; a video (or a piece of music) keeps moving, and
+ * the operator needs to be able to start it again, hold it, or send it back to
+ * the beginning without walking to the projector. Whether it is *really*
+ * playing is reported by the projector window, not guessed here.
+ */
+function OnScreenNow({
+  item,
+  playback,
+  busy,
+  onControl,
+  onHide,
+}: {
+  item: PresentationItem | null;
+  playback: MediaPlaybackState;
+  busy: boolean;
+  onControl: (action: "play" | "pause" | "restart" | "stop") => void;
+  onHide: () => void;
+}) {
+  const payload = item?.payload;
+  const isMedia = payload?.kind === "media";
+  const kind = isMedia ? (payload.mediaKind ?? "image") : undefined;
+  const playing = isMedia && playback.playing;
+
+  /** Where the file has got to, as `0:42 / 2:10`. */
+  const progress =
+    playback.durationMs > 0
+      ? `${formatTime(playback.positionMs)} / ${formatTime(playback.durationMs)}`
+      : playback.positionMs > 0
+        ? formatTime(playback.positionMs)
+        : null;
+
+  return (
+    <Panel
+      title="On the screen now"
+      actions={
+        item ? (
+          <div className="flex items-center gap-1">
+            <Badge variant={playing ? "success" : "muted"}>
+              {isMedia
+                ? kind === "video"
+                  ? playing
+                    ? "playing"
+                    : playback.ended
+                      ? "finished"
+                      : "paused"
+                  : kind === "audio"
+                    ? playing
+                      ? "playing"
+                      : "stopped"
+                    : "showing"
+                : "showing"}
+            </Badge>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={onHide}>
+              <EyeOff className="size-3.5" />
+              Take it off
+            </Button>
+          </div>
+        ) : null
+      }
+    >
+      {!item ? (
+        <EmptyHint>
+          The screen is blank. Press Show on a file to put it up.
+        </EmptyHint>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">
+                {item.title || "Untitled"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {friendlyContentType(item.contentType)}
+                {isMedia && payload.kind === "media"
+                  ? ` · ${payload.path}`
+                  : ""}
+              </p>
+            </div>
+            {progress ? (
+              <p className="font-mono text-xs text-muted-foreground">
+                {progress}
+              </p>
+            ) : null}
+          </div>
+
+          {/*
+            Only video and sound can be played, so only they get buttons. A
+            picture with a play button would be a lie.
+          */}
+          {isMedia && kind !== "image" ? (
+            <>
+              <Separator />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="success"
+                  size="sm"
+                  disabled={busy || playing}
+                  onClick={() => onControl("play")}
+                >
+                  <Play className="size-3.5" />
+                  Play
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy || !playing}
+                  onClick={() => onControl("pause")}
+                >
+                  <Pause className="size-3.5" />
+                  Pause
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => onControl("restart")}
+                >
+                  <RotateCcw className="size-3.5" />
+                  Start again
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => onControl("stop")}
+                >
+                  Stop
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {playing
+                    ? "It is playing on the screen now."
+                    : playback.ended
+                      ? "It has reached the end. Start it again, or take it off."
+                      : "It is on the screen, held at the beginning."}
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              A picture stays as it is until you show something else or take it
+              off.
+            </p>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/** `m:ss` for a progress readout. */
+function formatTime(ms: number): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 
 function MediaIcon({ kind, className }: { kind: string; className?: string }) {
   const style = className ?? "size-4 shrink-0 text-muted-foreground";

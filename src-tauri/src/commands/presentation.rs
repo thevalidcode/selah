@@ -44,21 +44,52 @@ pub async fn project_text(
     Ok(state.presentation.state())
 }
 
+/// A passage to project, with optional per-passage text sizes.
+///
+/// The Bible screen sends sizes when the operator nudged them there; `None`
+/// means "use the saved projector defaults", which is what every other caller
+/// (Live, saved presentations) wants.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPassageRequest {
+    pub passage: crate::bible::models::Passage,
+    #[serde(default)]
+    pub heading_size: Option<u32>,
+    #[serde(default)]
+    pub text_size: Option<u32>,
+}
+
 /// Projects a resolved passage.
 #[tauri::command]
 pub async fn project_passage(
     app: AppHandle,
     state: State<'_, AppState>,
-    passage: crate::bible::models::Passage,
+    request: ProjectPassageRequest,
 ) -> CommandResult<crate::models::presentation::PresentationState> {
-    let item = PresentationItem::scripture(
+    let passage = request.passage;
+    let item = PresentationItem::scripture_sized(
         &passage.reference,
         &passage.translation_id,
         passage.text.clone(),
+        clamped_size(request.heading_size),
+        clamped_size(request.text_size),
     );
     state.project(item, &app)?;
     Ok(state.presentation.state())
 }
+
+/// Keeps a size the operator typed inside the range the projector can draw.
+///
+/// The same bounds the Settings screen uses, so a stray `0` cannot make the
+/// verse invisible.
+fn clamped_size(size: Option<u32>) -> Option<u32> {
+    size.map(|value| value.clamp(MIN_ITEM_FONT_SIZE, MAX_ITEM_FONT_SIZE))
+}
+
+/// Smallest per-item text size the projector will draw.
+const MIN_ITEM_FONT_SIZE: u32 = 16;
+/// Largest per-item text size the projector will draw.
+const MAX_ITEM_FONT_SIZE: u32 = 400;
 
 #[tauri::command]
 pub fn clear_presentation(
@@ -183,6 +214,51 @@ pub fn add_presentation_item(
                 position: 0, // ignored; repository appends at the end
                 payload: request.payload.clone(),
             },
+        )
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateItemRequest {
+    pub presentation_id: String,
+    pub item_id: String,
+    /// Kept as the stored `type` (`text`, `scripture`, `announcement`), because
+    /// the projector styles items differently by kind.
+    pub r#type: String,
+    pub payload: String,
+}
+
+/// Replaces the content of an item already saved in a presentation.
+///
+/// This is what makes the Edit button possible: the row keeps its place in the
+/// list, only its content changes. The payload is validated by reading it back
+/// as a [`ContentPayload`] before it is stored, so a broken edit cannot be
+/// saved and only discovered when it fails to appear on screen.
+#[tauri::command]
+pub fn update_presentation_item(
+    request: UpdateItemRequest,
+    state: State<'_, AppState>,
+) -> CommandResult<()> {
+    let payload: crate::models::presentation::ContentPayload =
+        serde_json::from_str(&request.payload).map_err(|e| {
+            AppError::InvalidConfiguration(format!("this edit could not be read back: {e}"))
+        })?;
+
+    if let crate::models::presentation::ContentPayload::Text { ref text, .. } = payload {
+        if text.trim().is_empty() {
+            return Err(AppError::InvalidConfiguration(
+                "an item with no words cannot be saved".to_string(),
+            ));
+        }
+    }
+
+    state.with_conn(|conn| {
+        crate::bible::repository::PresentationRepository::new(conn).update_item(
+            &request.presentation_id,
+            &request.item_id,
+            &request.r#type,
+            &request.payload,
         )
     })
 }

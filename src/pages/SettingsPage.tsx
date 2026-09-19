@@ -40,11 +40,16 @@ import { EVENTS, useTauriEvent } from "@/lib/events";
 import type {
   AppSettings,
   AudioDeviceInfo,
+  BrandingPosition,
+  BrandingSettings,
   DisplayInfo,
   MediaItem,
   SpeechManagerState,
   TranslationStatus,
 } from "@/types";
+
+/** Longest branding line, mirroring `MAX_BRANDING_TEXT` on the Rust side. */
+const MAX_BRANDING_TEXT = 120;
 
 /**
  * Settings.
@@ -587,12 +592,29 @@ function PresentationSection({
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Pictures the operator already has, offered as logo choices — Selah never
+  // guesses at a path, and there is no separate file dialog to learn.
+  const [logoChoices, setLogoChoices] = useState<MediaItem[]>([]);
 
   useEffect(() => {
     presentationApi
       .listDisplays()
       .then(setDisplays)
       .catch(() => setDisplays([]));
+  }, []);
+
+  useEffect(() => {
+    mediaApi
+      .listMedia()
+      .then((files) =>
+        setLogoChoices(
+          files.filter(
+            (file) =>
+              file.kind === "image" || /\.(png|jpe?g|gif|webp|svg)$/i.test(file.path),
+          ),
+        ),
+      )
+      .catch(() => setLogoChoices([]));
   }, []);
 
   // Track the projector window from the events the Rust display manager emits,
@@ -629,6 +651,27 @@ function PresentationSection({
   const fontFamily = resolveFontFamily(presentation.fontFamily);
   const light = isLightColor(presentation.background);
   const textColor = light ? "#141B2E" : "#FFFFFF";
+  // A settings document saved before branding existed has no `branding` key,
+  // so the fields are read defensively rather than trusted.
+  const branding: BrandingSettings = presentation.branding ?? {
+    position: "bottom",
+    sizePercent: 30,
+  };
+  const brandText = branding.text?.trim();
+  const brandLogo = branding.logo?.trim();
+  const hasBranding = Boolean(brandText || brandLogo);
+
+  /** Size the branding is drawn at on the projector, in CSS pixels. */
+  const brandTextPx = Math.max(
+    8,
+    Math.round((presentation.fontSize * branding.sizePercent) / 100),
+  );
+  /**
+   * Size used inside the settings panel. A 60%-of-200px brand name is 120px on
+   * the wall, which would not fit a settings card, so it is shown smaller — and
+   * the line underneath says so.
+   */
+  const brandPreviewPx = Math.min(brandTextPx, 40);
 
   return (
     <>
@@ -790,6 +833,196 @@ function PresentationSection({
             />
           </div>
 
+          <div className="space-y-3 rounded-lg border border-border/60 p-3 sm:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">Your logo and name</p>
+                <p className="text-xs text-muted-foreground">
+                  Drawn over everything you show, so the screen looks like your
+                  church&apos;s. Leave both blank for no branding at all.
+                </p>
+              </div>
+              <Badge variant={hasBranding ? "success" : "muted"}>
+                {hasBranding ? "branding on" : "no branding"}
+              </Badge>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="brand-text">Words to show</Label>
+                <Input
+                  id="brand-text"
+                  value={branding.text ?? ""}
+                  onChange={(e) =>
+                    update({
+                      presentation: {
+                        branding: { ...branding, text: e.target.value },
+                      },
+                    })
+                  }
+                  placeholder="Grace Chapel"
+                  maxLength={MAX_BRANDING_TEXT}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Usually the church name. Kept short on purpose — it is not
+                  words to be read aloud.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="brand-logo">Logo</Label>
+                <Select
+                  value={branding.logo ?? ""}
+                  onValueChange={(logo) =>
+                    update({
+                      presentation: {
+                        branding: { ...branding, logo: logo || undefined },
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger id="brand-logo">
+                    <SelectValue placeholder="No logo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {logoChoices.map((file) => (
+                      <SelectItem key={file.path} value={file.path}>
+                        {file.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  aria-label="Logo file path"
+                  value={branding.logo ?? ""}
+                  onChange={(e) =>
+                    update({
+                      presentation: {
+                        branding: {
+                          ...branding,
+                          logo: e.target.value || undefined,
+                        },
+                      },
+                    })
+                  }
+                  placeholder="/Users/you/logo.png"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Pick a picture from your media library, or type the whole path
+                  to one. PNG with a transparent background looks best.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="brand-position">Where it sits</Label>
+                <Select
+                  value={branding.position}
+                  onValueChange={(position) =>
+                    update({
+                      presentation: {
+                        branding: {
+                          ...branding,
+                          position: position as BrandingPosition,
+                        },
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger id="brand-position">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bottom">Along the bottom</SelectItem>
+                    <SelectItem value="top">Along the top</SelectItem>
+                    <SelectItem value="left">Down the left side</SelectItem>
+                    <SelectItem value="right">Down the right side</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="brand-size">
+                  How big — {branding.sizePercent}% of the words
+                </Label>
+                <input
+                  id="brand-size"
+                  type="range"
+                  min={10}
+                  max={60}
+                  step={5}
+                  value={branding.sizePercent}
+                  onChange={(e) =>
+                    update({
+                      presentation: {
+                        branding: {
+                          ...branding,
+                          sizePercent: Number(e.target.value),
+                        },
+                      },
+                    })
+                  }
+                  className="h-9 w-full cursor-pointer accent-[var(--brand)]"
+                />
+              </div>
+            </div>
+
+            {/*
+              What the branding will actually look like: the chosen image, and
+              the church name drawn in the typeface and at the relative size the
+              projector will use. Seeing the logo here also proves the file can
+              be read — a mistyped path shows as a broken image.
+            */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">What the branding looks like</p>
+              <div
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 px-3 py-3"
+                style={{
+                  background: presentation.background,
+                  color: textColor,
+                  fontFamily: `"${fontFamily}"`,
+                }}
+              >
+                {brandLogo ? (
+                  <img
+                    src={mediaUrl(brandLogo)}
+                    alt="The logo that will be shown on the screen"
+                    className="max-h-16 max-w-40 object-contain"
+                  />
+                ) : (
+                  <span
+                    className="flex h-16 w-40 items-center justify-center rounded-md border border-dashed text-xs"
+                    style={{ borderColor: "currentColor", opacity: 0.55 }}
+                  >
+                    no logo chosen
+                  </span>
+                )}
+
+                {brandText ? (
+                  <span
+                    className="font-medium tracking-[0.22em] uppercase"
+                    style={{ fontSize: `${brandPreviewPx}px` }}
+                  >
+                    {brandText}
+                  </span>
+                ) : (
+                  <span className="text-xs" style={{ opacity: 0.55 }}>
+                    no words typed
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {brandText
+                  ? `${fontFamily} · ${brandTextPx}px (${branding.sizePercent}% of the ${presentation.fontSize}px words)`
+                  : `${fontFamily} · nothing to draw yet`}
+                {brandPreviewPx < brandTextPx
+                  ? " · shown smaller here so it fits the panel"
+                  : ""}
+              </p>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 sm:col-span-2">
             <Badge variant={open ? "success" : "muted"}>
               {open ? "screen is showing" : "screen is off"}
@@ -809,11 +1042,12 @@ function PresentationSection({
       <Panel title="How it will look">
         <div
           aria-label="Preview of the projected screen"
-          className="grid place-items-center overflow-hidden rounded-lg border border-border/60 px-[6%] py-[6%]"
+          className="relative grid place-items-center overflow-hidden rounded-lg border border-border/60 px-[6%] py-[6%]"
           style={{
             background: presentation.background,
             color: textColor,
             fontFamily: `"${fontFamily}"`,
+            minHeight: "9rem",
           }}
         >
           <div className="text-center">
@@ -831,10 +1065,49 @@ function PresentationSection({
               For God so loved the world…
             </p>
           </div>
+
+          {/*
+            The overlay is shown in the same place it will appear on the real
+            screen, at the same relative size.
+          */}
+          {hasBranding ? (
+            <div
+              className={`absolute flex items-center gap-1.5 ${
+                branding.position === "top" || branding.position === "bottom"
+                  ? "inset-x-0 justify-center"
+                  : "inset-y-0 flex-col justify-center"
+              } ${branding.position === "top" ? "top-0" : ""} ${
+                branding.position === "bottom" ? "bottom-0" : ""
+              } ${branding.position === "left" ? "left-0" : ""} ${
+                branding.position === "right" ? "right-0" : ""
+              }`}
+              style={{
+                opacity: 0.9,
+                padding: "0.5rem 0.75rem",
+                fontSize: `${presentation.fontSize * 0.02 * (branding.sizePercent / 30)}rem`,
+              }}
+            >
+              {brandLogo ? (
+                <img
+                  src={mediaUrl(brandLogo)}
+                  alt=""
+                  className="max-h-[1.6em] max-w-[6em] object-contain"
+                />
+              ) : null}
+              {brandText ? (
+                <span className="font-medium tracking-[0.22em] uppercase">
+                  {brandText}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           {fontFamily} · {presentation.fontSize}px · {presentation.background}
           {light ? " · dark letters" : " · light letters"}
+          {hasBranding
+            ? ` · branding ${branding.position}, ${branding.sizePercent}%`
+            : " · no branding"}
         </p>
       </Panel>
     </>

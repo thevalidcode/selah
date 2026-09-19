@@ -70,6 +70,13 @@ pub enum ContentPayload {
         /// Operator-supplied heading shown above the reference.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         heading: Option<String>,
+        /// Exact heading size in CSS pixels. The Bible screen can set this for
+        /// one verse without changing the saved projector defaults.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        heading_size: Option<u32>,
+        /// Exact verse size in CSS pixels, set the same way as `heading_size`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        text_size: Option<u32>,
     },
     /// Plain text (announcements, custom text, notes).
     Text {
@@ -136,6 +143,21 @@ pub struct PresentationItem {
 
 impl PresentationItem {
     pub fn scripture(reference: &str, translation: &str, text: String) -> Self {
+        Self::scripture_sized(reference, translation, text, None, None)
+    }
+
+    /// A passage whose heading and verse sizes were chosen on the Bible screen.
+    ///
+    /// `None` for either size means "use the saved projector setting", so this
+    /// can be used for every passage without the Bible screen having to know
+    /// what Settings currently holds.
+    pub fn scripture_sized(
+        reference: &str,
+        translation: &str,
+        text: String,
+        heading_size: Option<u32>,
+        text_size: Option<u32>,
+    ) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             content_type: ContentType::Scripture,
@@ -145,6 +167,8 @@ impl PresentationItem {
                 translation: translation.to_string(),
                 text,
                 heading: None,
+                heading_size,
+                text_size,
             },
         }
     }
@@ -465,6 +489,57 @@ mod tests {
             item.payload,
             ContentPayload::Song { index: 1, total: 3, ref text, .. }
                 if text == "Amazing grace, how sweet the sound"
+        ));
+    }
+
+    #[test]
+    fn sizes_chosen_on_the_bible_screen_reach_the_projector() {
+        // The Bible screen can enlarge a heading or shrink a long verse for one
+        // passage only; those sizes travel with the item.
+        let item = PresentationItem::scripture_sized(
+            "John 3:16",
+            "KJV",
+            "For God so loved the world".to_string(),
+            Some(120),
+            Some(72),
+        );
+        assert!(matches!(
+            item.payload,
+            ContentPayload::Scripture {
+                heading_size: Some(120),
+                text_size: Some(72),
+                ..
+            }
+        ));
+
+        // Leaving them out keeps the saved projector defaults in charge.
+        let plain = PresentationItem::scripture("John 3:16", "KJV", "…".to_string());
+        assert!(matches!(
+            plain.payload,
+            ContentPayload::Scripture {
+                heading_size: None,
+                text_size: None,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_passage_saved_before_sizes_existed_still_loads() {
+        // Saved items keep their payload as JSON, so an item stored by an
+        // earlier build has no size fields at all.
+        let row = record(
+            "scripture",
+            r#"{"kind":"scripture","reference":"Psalm 23","translation":"WEB","text":"The Lord is my shepherd"}"#,
+        );
+        let item = row.to_item().expect("should convert");
+        assert!(matches!(
+            item.payload,
+            ContentPayload::Scripture {
+                heading_size: None,
+                text_size: None,
+                ..
+            }
         ));
     }
 }

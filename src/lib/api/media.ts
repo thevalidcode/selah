@@ -2,6 +2,8 @@ import { command } from "./client";
 import type {
   DirectoryListing,
   MediaItem,
+  MediaPlaybackAction,
+  MediaPlaybackState,
   MediaScan,
   PresentationState,
 } from "../../types";
@@ -56,5 +58,47 @@ export function projectMedia(
 ): Promise<PresentationState> {
   return command<PresentationState>("project_media", {
     request: { path, title: title ?? null },
+  });
+}
+
+// ------------------------------------------------------------ playback
+
+/** What the projector says it is playing right now. */
+export function getMediaPlaybackState(): Promise<MediaPlaybackState> {
+  return command<MediaPlaybackState>("get_media_playback_state");
+}
+
+/**
+ * Asks the projector window to play, pause, restart or stop what is on it.
+ *
+ * The command goes through Rust because the projector is a separate webview:
+ * only it can touch the `<video>` element, so the operator screen sends an
+ * instruction rather than reaching across.
+ */
+export function controlMediaPlayback(
+  action: MediaPlaybackAction,
+): Promise<MediaPlaybackState> {
+  return command<MediaPlaybackState>("control_media_playback", {
+    request: { action },
+  });
+}
+
+/**
+ * Reports what the projector's player is doing (called by the projector
+ * window itself, never by the operator screen).
+ */
+export function reportMediaPlayback(state: {
+  playing: boolean;
+  positionMs?: number;
+  durationMs?: number;
+  ended?: boolean;
+}): Promise<MediaPlaybackState> {
+  return command<MediaPlaybackState>("report_media_playback", {
+    report: {
+      playing: state.playing,
+      positionMs: Math.max(0, Math.round(state.positionMs ?? 0)),
+      durationMs: Math.max(0, Math.round(state.durationMs ?? 0)),
+      ended: state.ended ?? false,
+    },
   });
 }

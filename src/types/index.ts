@@ -93,11 +93,39 @@ export interface Translation {
   abbreviation?: string;
   isDefault: boolean;
   createdAt: string;
+  /**
+   * True for the Bibles that come with Selah (WEB, KJV, ASV). They cannot be
+   * renamed or removed.
+   */
+  builtin: boolean;
+  /** `bundled`, `catalogue` or `operator` — where the translation came from. */
+  origin: string;
 }
 
 export interface TranslationStatus {
   translation: Translation;
   verseCount: number;
+}
+
+/**
+ * One published translation Selah knows how to hold.
+ *
+ * Metadata only — nothing is downloaded, and the words still come from a file
+ * the operator owns or from verses they supply.
+ */
+export interface CatalogueEntry {
+  id: string;
+  name: string;
+  abbreviation: string;
+  language: string;
+  /** `Classic`, `Modern`, `Everyday`, or `Added by you`. */
+  group: string;
+  /** One of Selah's own three, which cannot be removed. */
+  builtin: boolean;
+  installed: boolean;
+  verseCount: number;
+  /** Whether the translation text itself is public domain. */
+  publicDomain: boolean;
 }
 
 export interface BibleBook {
@@ -124,9 +152,85 @@ export interface Passage {
   text: string;
 }
 
+/**
+ * A theme to offer when a search finds nothing.
+ *
+ * Selah ships no Bible text, so a suggestion is only a reference (plus the
+ * theme it answers) — the words still come from the installed translation.
+ */
+export interface TopicSuggestion {
+  topic: string;
+  why: string;
+  bookId: number;
+  chapter: number;
+  verse: number;
+  /** Human-readable reference, e.g. `Philippians 4:6`. */
+  reference: string;
+}
+
+/** What a search found, and what to try when it found nothing. */
+export interface BibleSearchResult {
+  verses: Verse[];
+  /** True when the exact words did not match and these are the closest. */
+  related: boolean;
+  /** Themes to offer when no verse matched at all. */
+  suggestions: TopicSuggestion[];
+}
+
+/** One verse typed or pasted into the Custom translation tab. */
+export interface CustomVerseInput {
+  /** Book name, abbreviation or number, e.g. `John`, `Ps`, `43`. */
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
+export interface SaveCustomVersesRequest {
+  /** Short id the verses are filed under, e.g. `my-notes`. */
+  translationId?: string;
+  /** Name shown in the Bible picker. */
+  name?: string;
+  abbreviation?: string;
+  verses: CustomVerseInput[];
+}
+
+/** What was saved, and anything the operator should know about it. */
+export interface CustomVerseImportResult {
+  translationId: string;
+  reference: string;
+  bookId: number;
+  chapter: number;
+  versesSaved: number;
+  /** Verse numbers inside the saved range that were not supplied. */
+  missingVerses: number[];
+}
+
 // ------------------------------------------------------------- presentation
 
 export type MediaKind = "image" | "video" | "audio";
+
+/** What the operator asked the projector's player to do. */
+export type MediaPlaybackAction = "play" | "pause" | "restart" | "stop";
+
+/**
+ * What the projector window says it is playing.
+ *
+ * A video keeps moving after it is on the screen, and only the projector knows
+ * whether it really started, so the operator screen is told rather than
+ * guessing.
+ */
+export interface MediaPlaybackState {
+  /** The item on screen, when there is one. */
+  itemId?: string;
+  /** `image`, `video` or `audio`, when the item is media. */
+  mediaKind?: MediaKind;
+  playing: boolean;
+  positionMs: number;
+  durationMs: number;
+  /** A video that has run to its end. */
+  ended: boolean;
+}
 
 export type ContentPayload =
   | {
@@ -136,6 +240,13 @@ export type ContentPayload =
       text: string;
       /** Operator-supplied heading; wins over the reference on screen. */
       heading?: string;
+      /**
+       * Exact heading size in CSS pixels, chosen on the Bible screen. Absent
+       * means "use the saved projector size".
+       */
+      headingSize?: number;
+      /** Exact verse size in CSS pixels. Absent uses the saved projector size. */
+      textSize?: number;
     }
   | { kind: "text"; heading?: string; text: string }
   | {
@@ -265,7 +376,32 @@ export interface SongInput {
   sections: SongSectionInput[];
 }
 
-// ----------------------------------------------------------------- settings
+// ---------------------------------------------------------------- settings
+
+/**
+ * Where the branding overlay sits on the projector.
+ *
+ * The overlay hugs one edge and is centred along it, so a logo always looks
+ * deliberate rather than floating.
+ */
+export type BrandingPosition = "top" | "bottom" | "left" | "right";
+
+/**
+ * The operator's branding: a line of text and/or a logo image, drawn over every
+ * projected item so the screen looks like their church's.
+ *
+ * Both parts are optional — an empty text and no logo simply means no branding,
+ * so there is no separate on/off switch to fall out of sync.
+ */
+export interface BrandingSettings {
+  position: BrandingPosition;
+  /** Church name, service title, slogan… */
+  text?: string;
+  /** Absolute path to a logo image; drawn through the `asset:` protocol. */
+  logo?: string;
+  /** Overlay size as a percentage of the projected text size. */
+  sizePercent: number;
+}
 
 export interface AppSettings {
   general: {
@@ -293,6 +429,8 @@ export interface AppSettings {
     /** Projected typeface; one of the bundled families (see `lib/fonts`). */
     fontFamily: string;
     followLive: boolean;
+    /** The operator's own logo and line of text, drawn on every item. */
+    branding: BrandingSettings;
   };
   /** Where the media library reads files from (chosen at runtime). */
   media: {
@@ -330,6 +468,13 @@ export interface PresentationDisplayEvent {
   display?: string;
 }
 
+/** Payload of `media://playback` — what the operator asked the player to do. */
+export interface MediaPlaybackCommand {
+  action: MediaPlaybackAction;
+  /** The item the action is for, so a stale command cannot affect a new file. */
+  itemId?: string;
+}
+
 /** Payload of `presentation://settings` — how projected content should look. */
 export interface PresentationSettingsEvent {
   background: string;
@@ -337,6 +482,8 @@ export interface PresentationSettingsEvent {
   fontFamily: string;
   fullscreen: boolean;
   followLive: boolean;
+  /** The operator's logo and line of text, drawn on every projected item. */
+  branding: BrandingSettings;
 }
 
 /** Serialized error payload returned by failing commands. */
