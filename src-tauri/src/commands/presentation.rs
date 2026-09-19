@@ -33,10 +33,14 @@ pub async fn project_text(
     if let Some(display) = request.display {
         state.display.set_target(display)?;
     }
-    let fullscreen = request.fullscreen.unwrap_or(true);
+    // An explicit fullscreen choice wins; otherwise the saved setting does.
+    if let Some(fullscreen) = request.fullscreen {
+        if state.display.is_open() {
+            state.display.set_fullscreen(fullscreen)?;
+        }
+    }
     let item = PresentationItem::plain_text(&request.title, &request.text);
-    state.presentation.project(item, &state.display, &app)?;
-    let _ = fullscreen;
+    state.project(item, &app)?;
     Ok(state.presentation.state())
 }
 
@@ -52,7 +56,7 @@ pub async fn project_passage(
         &passage.translation_id,
         passage.text.clone(),
     );
-    state.presentation.project(item, &state.display, &app)?;
+    state.project(item, &app)?;
     Ok(state.presentation.state())
 }
 
@@ -72,11 +76,25 @@ pub async fn open_presentation_window(
     display: Option<usize>,
     fullscreen: Option<bool>,
 ) -> CommandResult<crate::presentation::DisplayInfo> {
-    if let Some(index) = display {
+    // Saved settings decide the screen and the fullscreen state; an explicit
+    // argument from the caller (Settings' "Show the screen" button) wins.
+    let saved = state
+        .settings
+        .lock()
+        .map(|s| s.presentation.clone())
+        .unwrap_or_default();
+    let target = display.or(saved.display_index);
+    if let Some(index) = target {
         state.display.set_target(index)?;
     }
-    let fullscreen = fullscreen.unwrap_or(true);
-    state.display.open(&app, fullscreen)
+    let fullscreen = fullscreen.unwrap_or(saved.fullscreen);
+
+    let opened = state.display.open(&app, fullscreen)?;
+
+    // Tell the freshly opened window how projected content should look, so it
+    // does not paint one frame of black-on-white defaults first.
+    state.apply_presentation_settings(&app)?;
+    Ok(opened)
 }
 
 #[tauri::command]
@@ -203,7 +221,7 @@ pub fn project_saved_item(
         .ok_or_else(|| AppError::Presentation(format!("item {item_id} no longer exists")))?;
 
     let item = record.to_item()?;
-    state.presentation.project(item, &state.display, &app)?;
+    state.project(item, &app)?;
     Ok(state.presentation.state())
 }
 
@@ -240,7 +258,7 @@ pub fn project_saved_presentation(
     for item in remaining {
         state.presentation.queue(item)?;
     }
-    state.presentation.project(first, &state.display, &app)?;
+    state.project(first, &app)?;
 
     Ok(state.presentation.state())
 }

@@ -6,7 +6,7 @@
 
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::audio::AudioManager;
 use crate::bible::Database;
@@ -79,6 +79,20 @@ impl AppState {
         if presentation_repaired {
             tracing::warn!("presentation settings were out of range; defaults restored");
             settings.presentation = presentation;
+        }
+
+        // Media is served to the projector window from a folder the operator
+        // chose at runtime. Re-open that folder now so saved media still works
+        // after a restart, without re-picking it.
+        if let Some(directory) = settings.media.directory.clone() {
+            let path = std::path::PathBuf::from(&directory);
+            match crate::media::grant_directory(app, &path) {
+                Ok(()) => tracing::info!(directory = %directory, "media folder opened"),
+                Err(err) => tracing::warn!(
+                    error = %err,
+                    "saved media folder could not be opened; it can be chosen again on the Media screen"
+                ),
+            }
         }
 
         let audio = AudioManager::default();
@@ -182,5 +196,65 @@ impl AppState {
             crate::bible::repository::SettingsRepository::new(conn)
                 .set_json(crate::models::settings::SETTINGS_KEY, &settings)
         })
+    }
+
+    /// Projects an item, opening the presentation window if it is not already up.
+    ///
+    /// The saved "fill the whole screen" setting is used when the window has to
+    /// be created, so the operator's choice is never silently overridden by a
+    /// default on the way to the projector.
+    pub fn project(
+        &self,
+        item: crate::models::presentation::PresentationItem,
+        app: &AppHandle,
+    ) -> Result<(), AppError> {
+        let fullscreen = self
+            .settings
+            .lock()
+            .map(|s| s.presentation.fullscreen)
+            .unwrap_or(true);
+        self.display.ensure_open(app, fullscreen)?;
+        self.presentation.project(item, &self.display, app)
+    }
+
+    /// Pushes the saved projector settings at the live presentation window.
+    ///
+    /// Saving Settings has to change what the congregation actually sees —
+    /// background colour, text size, typeface and fullscreen — so this is the
+    /// step that makes a Save real rather than just a database write:
+    ///
+    /// 1. the chosen screen becomes the projection target;
+    /// 2. an already-open projector window follows the fullscreen setting;
+    /// 3. the window is told the new look over `presentation://settings`.
+    ///
+    /// A stale display index (for example a projector that was unplugged) is
+    /// logged and skipped; it must never block saving everything else.
+    pub fn apply_presentation_settings(&self, app: &AppHandle) -> Result<(), AppError> {
+        let presentation = self
+            .settings
+            .lock()
+            .map_err(|_| AppError::Internal("settings lock poisoned".to_string()))?
+            .presentation
+            .clone();
+
+        if let Some(index) = presentation.display_index {
+            if let Err(err) = self.display.set_target(index) {
+                tracing::warn!(error = %err, "could not select the saved screen");
+            }
+        }
+
+        if self.display.is_open() {
+            if let Err(err) = self.display.set_fullscreen(presentation.fullscreen) {
+                tracing::warn!(error = %err, "could not change the projector's fullscreen state");
+            }
+        }
+
+        if let Err(err) = app.emit(
+            crate::events::PRESENTATION_SETTINGS,
+            crate::events::PresentationSettingsEvent::from(&presentation),
+        ) {
+            tracing::warn!(error = %err, "could not tell the projector about the new settings");
+        }
+        Ok(())
     }
 }

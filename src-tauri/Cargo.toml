@@ -16,7 +16,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [ "tray-icon"] }
+# `protocol-asset` serves media files (images/video/audio) to the webview
+# through the `asset:` URI scheme. Which folders are readable is granted at
+# runtime (see `media::MediaAccess`), so no path is hardcoded anywhere.
+tauri = { version = "2", features = [ "tray-icon", "protocol-asset" ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.40", features = ["bundled"] }

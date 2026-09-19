@@ -9,6 +9,7 @@ export type SettingsPatch = {
   audio?: Partial<AppSettings["audio"]>;
   speech?: Partial<AppSettings["speech"]>;
   presentation?: Partial<AppSettings["presentation"]>;
+  media?: Partial<AppSettings["media"]>;
 };
 
 /**
@@ -21,7 +22,8 @@ export function useSettings(): {
   settings: AppSettings | null;
   loading: boolean;
   error: string | null;
-  save: (patch: SettingsPatch) => Promise<void>;
+  /** Saves a patch; resolves `true` when the document was stored. */
+  save: (patch: SettingsPatch) => Promise<boolean>;
   reload: () => void;
 } {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -47,7 +49,7 @@ export function useSettings(): {
   }, [reload]);
 
   const save = useCallback(
-    async (patch: SettingsPatch) => {
+    async (patch: SettingsPatch): Promise<boolean> => {
       const current =
         settings ??
         // First save before the initial load finished: fetch, then patch.
@@ -58,6 +60,7 @@ export function useSettings(): {
         audio: { ...current.audio, ...patch.audio },
         speech: { ...current.speech, ...patch.speech },
         presentation: { ...current.presentation, ...patch.presentation },
+        media: { ...current.media, ...patch.media },
       };
 
       // Optimistic update keeps controls responsive; the Rust side echoes the
@@ -67,9 +70,11 @@ export function useSettings(): {
         const saved = await settingsApi.updateSettings(next);
         setSettings(saved);
         setError(null);
+        return true;
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : String(e));
         reload();
+        return false;
       }
     },
     [settings, reload],

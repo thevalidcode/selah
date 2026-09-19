@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { HardDrive, Mic, Monitor, Palette, Sparkles, Upload } from "lucide-react";
+import {
+  CheckCircle2,
+  FolderOpen,
+  HardDrive,
+  Mic,
+  Monitor,
+  Palette,
+  RotateCcw,
+  Save,
+  Sparkles,
+  Upload,
+} from "lucide-react";
 
-import PageHeader, { KeyValueList, Panel } from "@/components/PageHeader";
+import PageHeader, { EmptyHint, KeyValueList, Panel } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,11 +32,16 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { useSettings } from "@/hooks/useSettings";
-import { audioApi, bibleApi, presentationApi, speechApi } from "@/lib/api";
+import { useSettings, type SettingsPatch } from "@/hooks/useSettings";
+import { FONT_OPTIONS, isLightColor, resolveFontFamily } from "@/lib/fonts";
+import { mediaUrl } from "@/lib/media";
+import { audioApi, bibleApi, mediaApi, presentationApi, speechApi } from "@/lib/api";
+import { EVENTS, useTauriEvent } from "@/lib/events";
 import type {
+  AppSettings,
   AudioDeviceInfo,
   DisplayInfo,
+  MediaItem,
   SpeechManagerState,
   TranslationStatus,
 } from "@/types";
@@ -33,11 +49,62 @@ import type {
 /**
  * Settings.
  *
- * Every control writes through to SQLite immediately (one JSON settings
- * document), so changing a value can never be lost by forgetting to save.
+ * Everything is edited as a *draft* and written to SQLite when Save is pressed.
+ * Saving is not just a database write: the projector window is told about the
+ * new background, text size and typeface, and an open projector follows the
+ * fullscreen and screen choices — so a Save is visibly real.
  */
 export default function SettingsPage() {
-  const { settings, save, error } = useSettings();
+  const { settings, error, save } = useSettings();
+  const [draft, setDraft] = useState<AppSettings | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Follow the stored document until the operator starts editing; never
+  // clobber half-finished edits with a background reload.
+  useEffect(() => {
+    if (settings && !dirty) {
+      setDraft(settings);
+    }
+  }, [settings, dirty]);
+
+  const update = useCallback((patch: SettingsPatch) => {
+    setDraft((current) =>
+      current
+        ? {
+            general: { ...current.general, ...patch.general },
+            audio: { ...current.audio, ...patch.audio },
+            speech: { ...current.speech, ...patch.speech },
+            presentation: { ...current.presentation, ...patch.presentation },
+            media: { ...current.media, ...patch.media },
+          }
+        : current,
+    );
+    setDirty(true);
+    setNotice(null);
+  }, []);
+
+  async function saveDraft() {
+    if (!draft) {
+      return;
+    }
+    setSaving(true);
+    try {
+      if (await save(draft)) {
+        setDirty(false);
+        setNotice("Saved — the screen follows these settings straight away.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function discard() {
+    setDraft(settings);
+    setDirty(false);
+    setNotice(null);
+  }
 
   return (
     <>
@@ -67,37 +134,104 @@ export default function SettingsPage() {
           <TabsTrigger value="presentation">
             <Monitor className="size-3.5" /> Screen
           </TabsTrigger>
+          <TabsTrigger value="media">
+            <FolderOpen className="size-3.5" /> Media
+          </TabsTrigger>
           <TabsTrigger value="database">
             <HardDrive className="size-3.5" /> Bible text
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
-          <GeneralSection settings={settings} save={save} />
+          <GeneralSection settings={draft} update={update} />
         </TabsContent>
         <TabsContent value="audio">
-          <AudioSection settings={settings} save={save} />
+          <AudioSection settings={draft} update={update} />
         </TabsContent>
         <TabsContent value="speech">
-          <SpeechSection settings={settings} save={save} />
+          <SpeechSection settings={draft} update={update} />
         </TabsContent>
         <TabsContent value="presentation">
-          <PresentationSection settings={settings} save={save} />
+          <PresentationSection settings={draft} update={update} />
+        </TabsContent>
+        <TabsContent value="media">
+          <MediaSection settings={draft} update={update} />
         </TabsContent>
         <TabsContent value="database">
           <DatabaseSection />
         </TabsContent>
       </Tabs>
+
+      <SaveBar
+        dirty={dirty}
+        saving={saving}
+        notice={notice}
+        onSave={() => void saveDraft()}
+        onDiscard={discard}
+      />
     </>
   );
 }
 
+/** The always-visible Save row, so nothing is ever silently lost. */
+function SaveBar({
+  dirty,
+  saving,
+  notice,
+  onSave,
+  onDiscard,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  notice: string | null;
+  onSave: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur lg:-mx-5 lg:px-5">
+      <p className="text-xs text-muted-foreground">
+        {notice ? (
+          <span className="flex items-center gap-1.5 text-success">
+            <CheckCircle2 className="size-3.5" /> {notice}
+          </span>
+        ) : dirty ? (
+          "You have changes that are not saved yet."
+        ) : (
+          "Everything here is saved."
+        )}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!dirty || saving}
+          onClick={onDiscard}
+        >
+          <RotateCcw className="size-3.5" />
+          Undo changes
+        </Button>
+        <Button
+          variant="success"
+          size="sm"
+          disabled={!dirty || saving}
+          onClick={onSave}
+        >
+          <Save className="size-3.5" />
+          {saving ? "Saving…" : "Save settings"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 type Settings = NonNullable<ReturnType<typeof useSettings>["settings"]>;
-type Save = ReturnType<typeof useSettings>["save"];
+
+/** Applies a change to the draft document (nothing is stored until Save). */
+type Update = (patch: SettingsPatch) => void;
 
 // ---------------------------------------------------------------- general
 
-function GeneralSection({ settings, save }: { settings: Settings | null; save: Save }) {
+function GeneralSection({ settings, update }: { settings: Settings | null; update: Update }) {
   const [translations, setTranslations] = useState<TranslationStatus[]>([]);
 
   useEffect(() => {
@@ -120,7 +254,7 @@ function GeneralSection({ settings, save }: { settings: Settings | null; save: S
             id="app-name"
             value={settings.general.appName}
             onChange={(e) =>
-              void save({ general: { appName: e.target.value } })
+              update({ general: { appName: e.target.value } })
             }
           />
           <p className="text-xs text-muted-foreground">
@@ -133,7 +267,7 @@ function GeneralSection({ settings, save }: { settings: Settings | null; save: S
           <Select
             value={settings.general.theme}
             onValueChange={(theme) => {
-              void save({ general: { theme } });
+              update({ general: { theme } });
               document.documentElement.classList.toggle(
                 "light",
                 theme === "light",
@@ -162,7 +296,7 @@ function GeneralSection({ settings, save }: { settings: Settings | null; save: S
                 // The Rust side reports a missing translation; ignore here so
                 // the settings write still lands.
               }
-              void save({ general: { defaultTranslationId: value } });
+              update({ general: { defaultTranslationId: value } });
             }}
           >
             <SelectTrigger id="default-translation">
@@ -187,7 +321,7 @@ function GeneralSection({ settings, save }: { settings: Settings | null; save: S
 
 // ------------------------------------------------------------------- audio
 
-function AudioSection({ settings, save }: { settings: Settings | null; save: Save }) {
+function AudioSection({ settings, update }: { settings: Settings | null; update: Update }) {
   const [devices, setDevices] = useState<AudioDeviceInfo[]>([]);
   const [capture, setCapture] = useState<{
     capturing: boolean;
@@ -230,7 +364,7 @@ function AudioSection({ settings, save }: { settings: Settings | null; save: Sav
           <Select
             value={settings?.audio.inputDeviceId}
             onValueChange={(value) =>
-              void save({ audio: { inputDeviceId: value } })
+              update({ audio: { inputDeviceId: value } })
             }
           >
             <SelectTrigger id="input-device">
@@ -258,7 +392,7 @@ function AudioSection({ settings, save }: { settings: Settings | null; save: Sav
             min={0}
             value={settings?.audio.sampleRate ?? 0}
             onChange={(e) =>
-              void save({ audio: { sampleRate: Number(e.target.value) || 0 } })
+              update({ audio: { sampleRate: Number(e.target.value) || 0 } })
             }
           />
           <p className="text-xs text-muted-foreground">
@@ -302,7 +436,7 @@ function AudioSection({ settings, save }: { settings: Settings | null; save: Sav
 
 // ------------------------------------------------------------------ speech
 
-function SpeechSection({ settings, save }: { settings: Settings | null; save: Save }) {
+function SpeechSection({ settings, update }: { settings: Settings | null; update: Update }) {
   const [state, setState] = useState<SpeechManagerState | null>(null);
 
   useEffect(() => {
@@ -324,7 +458,7 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
           <Select
             value={settings.speech.recognizer}
             onValueChange={(recognizer) =>
-              void save({
+              update({
                 speech: { recognizer: recognizer as "mock" | "moonshine" },
               })
             }
@@ -354,7 +488,7 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
             id="model-path"
             value={settings.speech.modelPath ?? ""}
             onChange={(e) =>
-              void save({ speech: { modelPath: e.target.value || undefined } })
+              update({ speech: { modelPath: e.target.value || undefined } })
             }
             placeholder="…/models/moonshine"
           />
@@ -379,7 +513,7 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
             id="language"
             value={settings.speech.language ?? ""}
             onChange={(e) =>
-              void save({ speech: { language: e.target.value || undefined } })
+              update({ speech: { language: e.target.value || undefined } })
             }
             placeholder="en — leave blank to work it out"
           />
@@ -392,7 +526,7 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
             type="number"
             value={settings.speech.speechSampleRate}
             onChange={(e) =>
-              void save({
+              update({
                 speech: { speechSampleRate: Number(e.target.value) || 16000 },
               })
             }
@@ -410,7 +544,7 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
             min={1}
             value={settings.speech.threads}
             onChange={(e) =>
-              void save({ speech: { threads: Number(e.target.value) || 1 } })
+              update({ speech: { threads: Number(e.target.value) || 1 } })
             }
           />
           <p className="text-xs text-muted-foreground">
@@ -428,7 +562,7 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
           <Switch
             checked={settings.speech.vadEnabled}
             onCheckedChange={(vadEnabled) =>
-              void save({ speech: { vadEnabled } })
+              update({ speech: { vadEnabled } })
             }
           />
         </div>
@@ -439,12 +573,16 @@ function SpeechSection({ settings, save }: { settings: Settings | null; save: Sa
 
 // ------------------------------------------------------------ presentation
 
+/** Smallest / largest text size the projector offers (readable at the back). */
+const MIN_FONT_SIZE = 16;
+const MAX_FONT_SIZE = 200;
+
 function PresentationSection({
   settings,
-  save,
+  update,
 }: {
   settings: Settings | null;
-  save: Save;
+  update: Update;
 }) {
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [open, setOpen] = useState(false);
@@ -456,6 +594,11 @@ function PresentationSection({
       .then(setDisplays)
       .catch(() => setDisplays([]));
   }, []);
+
+  // Track the projector window from the events the Rust display manager emits,
+  // so the badge stays correct even if the screen was opened from elsewhere.
+  useTauriEvent(EVENTS.presentationDisplayOpened, () => setOpen(true));
+  useTauriEvent(EVENTS.presentationDisplayClosed, () => setOpen(false));
 
   async function toggleWindow() {
     if (!settings) {
@@ -482,115 +625,380 @@ function PresentationSection({
     return <Panel title="Screen">Loading…</Panel>;
   }
 
+  const { presentation } = settings;
+  const fontFamily = resolveFontFamily(presentation.fontFamily);
+  const light = isLightColor(presentation.background);
+  const textColor = light ? "#141B2E" : "#FFFFFF";
+
   return (
-    <Panel title="Screen for the congregation">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="presentation-display">Which screen</Label>
-          <Select
-            value={
-              settings.presentation.displayIndex === undefined
-                ? undefined
-                : String(settings.presentation.displayIndex)
-            }
-            onValueChange={(value) => {
-              const index = Number(value);
-              void save({ presentation: { displayIndex: index } });
-              // The Rust side validates the index; a stale display list simply
-              // fails silently here.
-              void presentationApi
-                .setPresentationDisplay(index)
-                .catch(() => undefined);
-            }}
-          >
-            <SelectTrigger id="presentation-display">
-              <SelectValue placeholder="The main screen" />
-            </SelectTrigger>
-            <SelectContent>
-              {displays.map((display) => (
-                <SelectItem key={display.index} value={String(display.index)}>
-                  {display.name ?? `Display ${display.index + 1}`} ·{" "}
-                  {display.size[0]}×{display.size[1]}
-                  {display.isPrimary ? " (primary)" : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="background">Background colour</Label>
-          <Input
-            id="background"
-            value={settings.presentation.background}
-            onChange={(e) =>
-              void save({ presentation: { background: e.target.value } })
-            }
-            placeholder="#000000"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="font-size">Text size</Label>
-          <Input
-            id="font-size"
-            type="number"
-            min={12}
-            value={settings.presentation.fontSize}
-            onChange={(e) =>
-              void save({
-                presentation: { fontSize: Number(e.target.value) || 12 },
-              })
-            }
-          />
-        </div>
-
-        <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-          <div>
-            <p className="text-sm font-medium">Fill the whole screen</p>
+    <>
+      <Panel title="Screen for the congregation">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="presentation-display">Which screen</Label>
+            <Select
+              value={
+                presentation.displayIndex === undefined
+                  ? undefined
+                  : String(presentation.displayIndex)
+              }
+              onValueChange={(value) =>
+                update({ presentation: { displayIndex: Number(value) } })
+              }
+            >
+              <SelectTrigger id="presentation-display">
+                <SelectValue placeholder="The main screen" />
+              </SelectTrigger>
+              <SelectContent>
+                {displays.map((display) => (
+                  <SelectItem key={display.index} value={String(display.index)}>
+                    {display.name ?? `Display ${display.index + 1}`} ·{" "}
+                    {display.size[0]}×{display.size[1]}
+                    {display.isPrimary ? " (primary)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">
-              No window edges or buttons. Best for a projector.
+              Applied when you press Save settings.
             </p>
           </div>
-          <Switch
-            checked={settings.presentation.fullscreen}
-            onCheckedChange={(fullscreen) =>
-              void save({ presentation: { fullscreen } })
-            }
-          />
-        </div>
 
-        <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-          <div>
-            <p className="text-sm font-medium">Follow the Live screen</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="background">Background colour</Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="background"
+                type="color"
+                value={
+                  /^#[0-9a-f]{6}$/i.test(presentation.background)
+                    ? presentation.background
+                    : "#000000"
+                }
+                onChange={(e) =>
+                  update({ presentation: { background: e.target.value } })
+                }
+                className="h-9 w-12 shrink-0 cursor-pointer rounded-md border border-border/60 bg-transparent p-1"
+              />
+              <Input
+                aria-label="Background colour code"
+                value={presentation.background}
+                onChange={(e) =>
+                  update({ presentation: { background: e.target.value } })
+                }
+                placeholder="#000000"
+              />
+            </div>
             <p className="text-xs text-muted-foreground">
-              Show whatever you send from Live, without pressing anything else.
+              Letters turn dark by themselves on a pale colour.
             </p>
           </div>
-          <Switch
-            checked={settings.presentation.followLive}
-            onCheckedChange={(followLive) =>
-              void save({ presentation: { followLive } })
-            }
-          />
-        </div>
 
-        <div className="flex items-center gap-2 sm:col-span-2">
-          <Badge variant={open ? "success" : "muted"}>
-            {open ? "screen is showing" : "screen is off"}
-          </Badge>
+          <div className="space-y-1.5">
+            <Label htmlFor="font-size">
+              Text size — {presentation.fontSize}px
+            </Label>
+            <input
+              id="font-size"
+              type="range"
+              min={MIN_FONT_SIZE}
+              max={MAX_FONT_SIZE}
+              step={2}
+              value={presentation.fontSize}
+              onChange={(e) =>
+                update({ presentation: { fontSize: Number(e.target.value) } })
+              }
+              className="h-9 w-full cursor-pointer accent-[var(--brand)]"
+            />
+            <Input
+              type="number"
+              min={MIN_FONT_SIZE}
+              max={MAX_FONT_SIZE}
+              value={presentation.fontSize}
+              aria-label="Text size in pixels"
+              onChange={(e) => {
+                const next = Number(e.target.value) || MIN_FONT_SIZE;
+                update({
+                  presentation: {
+                    fontSize: Math.min(
+                      Math.max(next, MIN_FONT_SIZE),
+                      MAX_FONT_SIZE,
+                    ),
+                  },
+                });
+              }}
+            />
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="font-family">Typeface</Label>
+            {/*
+              Every option is drawn in its own typeface, so the choice can be
+              judged by eye rather than by name.
+            */}
+            <Select
+              value={fontFamily}
+              onValueChange={(value) =>
+                update({ presentation: { fontFamily: value } })
+              }
+            >
+              <SelectTrigger id="font-family">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FONT_OPTIONS.map((font) => (
+                  <SelectItem
+                    key={font.family}
+                    value={font.family}
+                    style={{ fontFamily: `"${font.family}"` }}
+                  >
+                    {font.label} · {font.description}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+            <div>
+              <p className="text-sm font-medium">Fill the whole screen</p>
+              <p className="text-xs text-muted-foreground">
+                No window edges or buttons. Best for a projector.
+              </p>
+            </div>
+            <Switch
+              checked={presentation.fullscreen}
+              onCheckedChange={(fullscreen) =>
+                update({ presentation: { fullscreen } })
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+            <div>
+              <p className="text-sm font-medium">Follow the Live screen</p>
+              <p className="text-xs text-muted-foreground">
+                Show whatever you send from Live, without pressing anything
+                else.
+              </p>
+            </div>
+            <Switch
+              checked={presentation.followLive}
+              onCheckedChange={(followLive) =>
+                update({ presentation: { followLive } })
+              }
+            />
+          </div>
+
+          <div className="flex items-center gap-2 sm:col-span-2">
+            <Badge variant={open ? "success" : "muted"}>
+              {open ? "screen is showing" : "screen is off"}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => void toggleWindow()}
+            >
+              {open ? "Hide the screen" : "Show the screen"}
+            </Button>
+          </div>
+        </div>
+      </Panel>
+
+      <Panel title="How it will look">
+        <div
+          aria-label="Preview of the projected screen"
+          className="grid place-items-center overflow-hidden rounded-lg border border-border/60 px-[6%] py-[6%]"
+          style={{
+            background: presentation.background,
+            color: textColor,
+            fontFamily: `"${fontFamily}"`,
+          }}
+        >
+          <div className="text-center">
+            {/* Scaled down so a whole sample fits the settings panel. */}
+            <p
+              className="font-semibold uppercase tracking-[0.12em]"
+              style={{ fontSize: `${presentation.fontSize * 0.045}rem` }}
+            >
+              John 3:16
+            </p>
+            <p
+              className="font-light"
+              style={{ fontSize: `${presentation.fontSize * 0.035}rem` }}
+            >
+              For God so loved the world…
+            </p>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {fontFamily} · {presentation.fontSize}px · {presentation.background}
+          {light ? " · dark letters" : " · light letters"}
+        </p>
+      </Panel>
+    </>
+  );
+}
+
+// ------------------------------------------------------------------- media
+
+/**
+ * Media files.
+ *
+ * The folder itself is chosen on the Media screen, which is where files are
+ * browsed and loaded; this panel shows what was loaded and re-reads the folder
+ * after new files have been added to it.
+ */
+function MediaSection({
+  settings,
+  update,
+}: {
+  settings: Settings | null;
+  update: Update;
+}) {
+  const [items, setItems] = useState<MediaItem[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const directory = settings?.media.directory;
+  const recursive = settings?.media.recursive ?? false;
+
+  useEffect(() => {
+    mediaApi
+      .listMedia()
+      .then(setItems)
+      .catch(() => setItems([]));
+  }, []);
+
+  async function reloadFolder() {
+    if (!directory) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const scan = await mediaApi.loadMediaDirectory(directory, recursive);
+      setItems(scan.items);
+      setError(null);
+      setNotice(
+        `${scan.total} file${scan.total === 1 ? "" : "s"} ready${
+          scan.added > 0 ? ` (${scan.added} new)` : ""
+        }.`,
+      );
+    } catch (e: unknown) {
+      setNotice(null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!settings) {
+    return <Panel title="Media files">Loading…</Panel>;
+  }
+
+  return (
+    <Panel title="Media files">
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1 space-y-1.5">
+            <Label htmlFor="media-folder">
+              Folder Selah reads pictures and videos from
+            </Label>
+            <Input
+              id="media-folder"
+              value={directory ?? ""}
+              readOnly
+              placeholder="No folder chosen yet — pick one on the Media screen"
+            />
+          </div>
           <Button
             variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => void toggleWindow()}
+            disabled={busy || !directory}
+            onClick={() => void reloadFolder()}
           >
-            {open ? "Hide the screen" : "Show the screen"}
+            <FolderOpen className="size-4" />
+            Read it again
           </Button>
         </div>
+
+        <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+          <div>
+            <p className="text-sm font-medium">Include sub-folders</p>
+            <p className="text-xs text-muted-foreground">
+              Also look inside folders within the one you picked.
+            </p>
+          </div>
+          <Switch
+            checked={recursive}
+            onCheckedChange={(value) => update({ media: { recursive: value } })}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Press Save settings after changing this, then use “Read it again”.
+        </p>
+
+        {notice ? (
+          <p className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+            {notice}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+
+        <Separator />
+
+        {items.length === 0 ? (
+          <EmptyHint>
+            Nothing loaded yet. Open the Media screen, choose a folder, and Selah
+            will read the pictures and videos inside it.
+          </EmptyHint>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {items.slice(0, 9).map((item) => (
+              <li
+                key={item.id}
+                className="overflow-hidden rounded-lg border border-border/60"
+              >
+                {item.kind === "image" ? (
+                  <img
+                    src={mediaUrl(item.path)}
+                    alt={item.name}
+                    className="h-24 w-full bg-black object-contain"
+                  />
+                ) : (
+                  <div className="grid h-24 w-full place-items-center bg-muted text-xs tracking-[0.12em] text-muted-foreground uppercase">
+                    {friendlyMediaKind(item.kind)}
+                  </div>
+                )}
+                <p className="truncate px-2 py-1.5 text-xs">{item.name}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+        {items.length > 9 ? (
+          <p className="text-xs text-muted-foreground">
+            Showing 9 of {items.length} files — the rest are on the Media screen.
+          </p>
+        ) : null}
       </div>
     </Panel>
   );
+}
+
+/** Plain-language name for a media kind. */
+function friendlyMediaKind(kind: string): string {
+  if (kind === "video") {
+    return "video";
+  }
+  if (kind === "audio") {
+    return "sound";
+  }
+  return "picture";
 }
 
 // ---------------------------------------------------------------- database

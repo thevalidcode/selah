@@ -64,24 +64,31 @@ sequenceDiagram
 ```
 
 - **Multi-Monitor Presentation**: Manages separate windows for the operator interface and the congregation display, keeping controls hidden from the audience.
-- **Media Management**: Imports and manages local images, videos, and audio metadata without moving large files around the disk.
+- **Songs Library**: Songs are stored as ordered sections (verse, chorus, bridge) and presented one section at a time — the same step-by-step flow as Scripture, so a long song never has to be squeezed onto one screen.
+- **Media Folders**: Selah never hardcodes a media path. The operator picks a folder at runtime, Selah reads the pictures, videos and sound files inside it, and only that folder is readable by the projector window.
+- **Projector Look**: Background colour, text size and typeface are set in Settings and applied to the congregation's screen when Save is pressed — an already-open projector window updates immediately.
 
 ## Design System
 
 ### Typeface
 
-Selah uses **Creato Display** throughout — operator interface and projected
-output alike, so every screen speaks with one voice.
+Selah uses **Creato Display** throughout the operator interface, and lets the
+*projected* text use any of five bundled typefaces — so the words on the wall can
+be matched to the room without changing the interface.
 
 - Self-hosted from `src/fonts/` and bundled by Vite. Selah never fetches a font
   over the network, because it has to run on a machine with no internet.
-- Weights bundled: Light (300), Regular (400), Medium (500), Bold (700),
-  Black (900). Italics are omitted — nothing in the interface uses them.
-- Licensed under the **SIL Open Font License 1.1**, which permits embedding in
-  an application. Copyright (c) 2021 Anugrah Pasau, with Reserved Font Name
-  "Creato Display". Full text in `src/fonts/OFL.txt`; see
-  `src/fonts/README.md` for provenance and how to add a weight.
-- The reserved font name means the files must not be renamed or modified.
+- Creato Display weights bundled: Light (300), Regular (400), Medium (500),
+  Bold (700), Black (900). Italics are omitted — nothing in the interface uses
+  them.
+- Projector choices are listed in `FONT_OPTIONS` (`src/lib/fonts.ts`) and offered
+  by the typeface picker in Settings → Screen: Creato Display, Inter, Lora,
+  Oswald and JetBrains Mono. The four extras are variable fonts (28–48 KB each).
+- All are licensed under the **SIL Open Font License 1.1**, which permits
+  embedding in an application. Creato Display: copyright (c) 2021 Anugrah Pasau,
+  with Reserved Font Name "Creato Display" — the files must not be renamed or
+  modified. Full texts live in `src/fonts/OFL.txt` and `src/fonts/licenses/`;
+  see `src/fonts/README.md` for provenance and how to add a family.
 
 ### Brand palette
 
@@ -187,6 +194,13 @@ When you first launch the application, you will be greeted by the setup screen. 
 4.  **Start Listening**: Go to the Live screen and click the Listen button to activate the audio pipeline.
 
 Detected scripture will appear in the review panel. Click Display to send the content to the presentation window.
+
+### A round trip you can demo
+
+1. **Songs** → write a title and two sections (label + words) → **Save** → **Show on screen**. Each section is one screen; **Next** / **Back** step through the song verse by verse.
+2. **Media** → **Choose folder…** → walk to the folder with your pictures and videos → **Read this folder** → **Show** on any file. Images and video take over the projector window; the folder you picked is the only one Selah may read.
+3. **Settings → Screen** → change the background colour, drag the text size, pick a typeface (each option is drawn in its own font) → **Save settings**. An already-open projector window updates immediately, and the "How it will look" panel previews the result.
+4. **Presentations** → add a heading and some words → **Show on screen**: the heading you typed appears above the words, and the item list shows it instead of raw JSON.
 
 ## Technologies Used
 
@@ -1188,7 +1202,7 @@ The application backend uses Tauri IPC commands for communication with the front
 
 #### [IPC] list_media
 
-**Description**: Lists all imported media file metadata.
+**Description**: Lists the metadata of every media file Selah has read. Files themselves are never copied — SQLite stores metadata only.
 
 **Request**:
 
@@ -1217,9 +1231,127 @@ The application backend uses Tauri IPC commands for communication with the front
 
 - 500: Database error listing media
 
+#### [IPC] browse_directory
+
+**Description**: Lists one folder so the operator can walk to the folder their media lives in. No path is hardcoded in the application; omitting `path` starts at the user's home folder.
+
+**Request**:
+
+```json
+{
+  "path": "/Users/operator/Pictures"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "path": "/Users/operator/Pictures",
+    "parent": "/Users/operator",
+    "entries": [
+      {
+        "name": "Sunday",
+        "path": "/Users/operator/Pictures/Sunday",
+        "isDir": true
+      },
+      {
+        "name": "baptism.jpg",
+        "path": "/Users/operator/Pictures/baptism.jpg",
+        "isDir": false,
+        "mediaKind": "image"
+      }
+    ]
+  }
+}
+```
+
+**Errors**:
+
+- 400: The path is not a folder, or cannot be read
+
+#### [IPC] load_media_directory
+
+**Description**: Reads a folder and registers the pictures, videos and sound files inside it. The folder is remembered in settings and opened to the projector window, so only the folder the operator chose is readable.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "path": "/Users/operator/Pictures",
+    "recursive": false
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "directory": "/Users/operator/Pictures",
+    "added": 12,
+    "total": 12,
+    "items": []
+  }
+}
+```
+
+**Errors**:
+
+- 400: The folder does not exist or cannot be read
+- 500: Database error registering media
+
+#### [IPC] project_media
+
+**Description**: Puts a media file on the congregation's screen. The presentation window loads the file through Tauri's `asset:` protocol, because a webview cannot read a plain filesystem path.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "path": "/Users/operator/Pictures/baptism.jpg",
+    "title": "Baptism"
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "current": {
+      "id": "8f1c…",
+      "contentType": "image",
+      "title": "Baptism",
+      "payload": {
+        "kind": "media",
+        "path": "/Users/operator/Pictures/baptism.jpg",
+        "mediaKind": "image",
+        "heading": "Baptism"
+      }
+    },
+    "queue": [],
+    "history": []
+  }
+}
+```
+
+**Errors**:
+
+- 400: The file does not exist, or Selah cannot present that file type
+- 500: Presentation window could not be opened
+
 #### [IPC] import_media
 
-**Description**: Imports media metadata by pointing to an absolute local file path.
+**Description**: Registers a single local file (used for one-off files that live outside the chosen media folder).
 
 **Request**:
 
@@ -1276,6 +1408,190 @@ The application backend uses Tauri IPC commands for communication with the front
 
 - 500: Database error removing media
 
+#### [IPC] list_songs
+
+**Description**: Lists every song in the library (titles and authors; sections are loaded with `get_song`).
+
+**Request**:
+
+```json
+{}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "song_1",
+      "title": "Amazing Grace",
+      "author": "John Newton",
+      "createdAt": "2023-10-01T12:00:00Z",
+      "updatedAt": "2023-10-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+**Errors**:
+
+- 500: Database error listing songs
+
+#### [IPC] get_song
+
+**Description**: Loads one song with its sections in presentation order.
+
+**Request**:
+
+```json
+{
+  "id": "song_1"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "song_1",
+    "title": "Amazing Grace",
+    "author": "John Newton",
+    "createdAt": "2023-10-01T12:00:00Z",
+    "updatedAt": "2023-10-01T12:00:00Z",
+    "sections": [
+      {
+        "id": "section_1",
+        "label": "Verse 1",
+        "text": "Amazing grace, how sweet the sound",
+        "position": 1
+      }
+    ]
+  }
+}
+```
+
+**Errors**:
+
+- 500: Database error reading the song
+
+#### [IPC] save_song
+
+**Description**: Creates a song, or replaces one when `id` is supplied. Sections are normalised: they are trimmed, blank sections are dropped, and a song with no words is rejected.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "id": null,
+    "song": {
+      "title": "Amazing Grace",
+      "author": "John Newton",
+      "sections": [
+        { "label": "Verse 1", "text": "Amazing grace, how sweet the sound" },
+        { "label": "Chorus", "text": "My chains are gone" }
+      ]
+    }
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "song_1",
+    "title": "Amazing Grace",
+    "author": "John Newton",
+    "createdAt": "2023-10-01T12:00:00Z",
+    "updatedAt": "2023-10-01T12:00:00Z",
+    "sections": []
+  }
+}
+```
+
+**Errors**:
+
+- 400: The song has no title, or no section contains words
+- 400: The song to replace no longer exists
+- 500: Database error saving the song
+
+#### [IPC] delete_song
+
+**Description**: Removes a song and its sections from the library.
+
+**Request**:
+
+```json
+{
+  "id": "song_1"
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+**Errors**:
+
+- 500: Database error deleting the song
+
+#### [IPC] project_song
+
+**Description**: Shows a song on the projector, starting from a section. Every section becomes its own projectable item and the rest are queued, so `show_next_item` / `show_previous_item` step through the song section by section.
+
+**Request**:
+
+```json
+{
+  "request": {
+    "songId": "song_1",
+    "section": 1
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "current": {
+      "id": "9ab2…",
+      "contentType": "song",
+      "title": "Amazing Grace — Verse 1",
+      "payload": {
+        "kind": "song",
+        "title": "Amazing Grace",
+        "label": "Verse 1",
+        "text": "Amazing grace, how sweet the sound",
+        "index": 1,
+        "total": 2
+      }
+    },
+    "queue": [],
+    "history": []
+  }
+}
+```
+
+**Errors**:
+
+- 400: The song does not exist, or has no sections yet
+- 500: Presentation window could not be opened
+
 #### [IPC] get_settings
 
 **Description**: Retrieves the entire application settings document.
@@ -1309,7 +1625,12 @@ The application backend uses Tauri IPC commands for communication with the front
       "fullscreen": true,
       "background": "#000000",
       "fontSize": 64,
+      "fontFamily": "Creato Display",
       "followLive": true
+    },
+    "media": {
+      "directory": null,
+      "recursive": false
     }
   }
 }
@@ -1346,7 +1667,12 @@ The application backend uses Tauri IPC commands for communication with the front
         "fullscreen": true,
         "background": "#000000",
         "fontSize": 64,
+        "fontFamily": "Creato Display",
         "followLive": true
+      },
+      "media": {
+        "directory": null,
+        "recursive": false
       }
     }
   }

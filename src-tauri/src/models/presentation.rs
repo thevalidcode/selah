@@ -19,6 +19,8 @@ pub enum ContentType {
     Video,
     Announcement,
     Slide,
+    /// A song from the library, presented one section at a time.
+    Song,
 }
 
 impl ContentType {
@@ -31,6 +33,7 @@ impl ContentType {
             ContentType::Video => "video",
             ContentType::Announcement => "announcement",
             ContentType::Slide => "slide",
+            ContentType::Song => "song",
         }
     }
 
@@ -43,6 +46,7 @@ impl ContentType {
             "video" => ContentType::Video,
             "announcement" => ContentType::Announcement,
             "slide" => ContentType::Slide,
+            "song" => ContentType::Song,
             _ => return None,
         })
     }
@@ -50,6 +54,10 @@ impl ContentType {
 
 /// The payload of a presentation item. Tagged so the payload can be extended
 /// without changing the presentation engine.
+///
+/// `#[serde(default)]` on the newer fields keeps items stored by an earlier
+/// build loading cleanly — a saved item must never become unreadable just
+/// because a field was added.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ContentPayload {
@@ -59,11 +67,61 @@ pub enum ContentPayload {
         reference: String,
         translation: String,
         text: String,
+        /// Operator-supplied heading shown above the reference.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        heading: Option<String>,
     },
     /// Plain text (announcements, custom text, notes).
-    Text { text: String },
+    Text {
+        /// Heading typed by the operator. This is what makes a custom heading
+        /// survive a save/reload round-trip and reach the projector.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        heading: Option<String>,
+        text: String,
+    },
     /// Local media file (image or video) referenced by filesystem path.
-    Media { path: String },
+    Media {
+        path: String,
+        /// `image`, `video` or `audio`. Absent for files imported by an
+        /// earlier build; the presentation window then guesses from the
+        /// extension. Named `mediaKind` because `kind` is the payload's tag.
+        #[serde(default, rename = "mediaKind", skip_serializing_if = "Option::is_none")]
+        media_kind: Option<String>,
+        /// Optional caption shown over the media.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        heading: Option<String>,
+    },
+    /// One section of a song (verse, chorus, bridge...). Songs are stepped
+    /// through section by section, exactly like verses of Scripture.
+    Song {
+        /// Song title, drawn as the heading.
+        title: String,
+        /// Section label (`Verse 1`, `Chorus`). Absent when the section has
+        /// none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+        text: String,
+        /// 1-based position of this section within the song.
+        #[serde(default = "one")]
+        index: u32,
+        /// Total number of sections in the song.
+        #[serde(default = "one")]
+        total: u32,
+    },
+}
+
+/// Serde default for counters that cannot sensibly be zero.
+fn one() -> u32 {
+    1
+}
+
+/// True when `value` is present and contains something other than whitespace.
+fn non_empty(value: &Option<String>) -> Option<String> {
+    value
+        .as_ref()
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string())
 }
 
 /// An item the presentation engine can display.
@@ -86,25 +144,78 @@ impl PresentationItem {
                 reference: reference.to_string(),
                 translation: translation.to_string(),
                 text,
+                heading: None,
             },
         }
     }
 
     pub fn plain_text(title: impl Into<String>, text: impl Into<String>) -> Self {
+        let heading = title.into();
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             content_type: ContentType::Text,
-            title: title.into(),
-            payload: ContentPayload::Text { text: text.into() },
+            title: heading.clone(),
+            payload: ContentPayload::Text {
+                heading: Some(heading).filter(|h| !h.trim().is_empty()),
+                text: text.into(),
+            },
         }
     }
 
-    pub fn media(title: impl Into<String>, path: impl Into<String>) -> Self {
+    /// A media file ready for the projector.
+    ///
+    /// `heading` is only set when a caption was actually supplied: a picture or
+    /// video should take over the screen without the file name printed over it.
+    pub fn media(
+        title: impl Into<String>,
+        path: impl Into<String>,
+        kind: Option<String>,
+        heading: Option<String>,
+    ) -> Self {
+        let title = title.into();
         Self {
             id: uuid::Uuid::new_v4().to_string(),
-            content_type: ContentType::Image,
-            title: title.into(),
-            payload: ContentPayload::Media { path: path.into() },
+            content_type: match kind.as_deref() {
+                Some("video") => ContentType::Video,
+                _ => ContentType::Image,
+            },
+            title,
+            payload: ContentPayload::Media {
+                path: path.into(),
+                media_kind: kind,
+                heading: non_empty(&heading),
+            },
+        }
+    }
+
+    /// One section of a song, ready for the projector.
+    ///
+    /// Every section becomes its own projectable item so the operator can walk
+    /// through a song verse by verse with Next/Back, exactly as they do with
+    /// Scripture.
+    pub fn song_section(
+        song_title: &str,
+        label: Option<String>,
+        text: String,
+        index: u32,
+        total: u32,
+    ) -> Self {
+        let label = label.filter(|l| !l.trim().is_empty());
+        let title = match &label {
+            Some(label) => format!("{song_title} — {label}"),
+            None => format!("{song_title} — {index}/{total}"),
+        };
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            content_type: ContentType::Song,
+            title,
+            payload: ContentPayload::Song {
+                title: song_title.to_string(),
+                label,
+                text,
+                index,
+                total,
+            },
         }
     }
 }
@@ -161,6 +272,7 @@ impl PresentationItemRecord {
             ContentPayload::Scripture { .. } => ContentType::Scripture,
             ContentPayload::Text { .. } => ContentType::Text,
             ContentPayload::Media { .. } => ContentType::Image,
+            ContentPayload::Song { .. } => ContentType::Song,
         });
 
         Ok(PresentationItem {
@@ -173,13 +285,20 @@ impl PresentationItemRecord {
 }
 
 /// A short heading for an item, used where only a label is needed.
+///
+/// An operator-supplied heading always wins: if someone typed a heading for
+/// their words, that is what should appear on the projector.
 fn item_title(payload: &ContentPayload) -> String {
     match payload {
         ContentPayload::Scripture {
             reference,
             translation,
+            heading,
             ..
         } => {
+            if let Some(heading) = non_empty(heading) {
+                return heading;
+            }
             let combined = format!("{translation} {reference}");
             let trimmed = combined.trim();
             if trimmed.is_empty() {
@@ -188,15 +307,22 @@ fn item_title(payload: &ContentPayload) -> String {
                 trimmed.to_string()
             }
         }
-        ContentPayload::Text { text } => text
-            .lines()
-            .find(|line| !line.trim().is_empty())
-            .map(|line| line.trim().chars().take(60).collect())
-            .unwrap_or_else(|| "Words".to_string()),
-        ContentPayload::Media { path } => std::path::Path::new(path)
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Media".to_string()),
+        ContentPayload::Text { heading, text } => non_empty(heading).unwrap_or_else(|| {
+            text.lines()
+                .find(|line| !line.trim().is_empty())
+                .map(|line| line.trim().chars().take(60).collect())
+                .unwrap_or_else(|| "Words".to_string())
+        }),
+        ContentPayload::Media { path, heading, .. } => non_empty(heading).unwrap_or_else(|| {
+            std::path::Path::new(path)
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Media".to_string())
+        }),
+        ContentPayload::Song { title, label, .. } => match non_empty(label) {
+            Some(label) => format!("{title} — {label}"),
+            None => title.clone(),
+        },
     }
 }
 
@@ -250,5 +376,95 @@ mod tests {
         let row = record("mystery", r#"{"kind":"text","text":"Hello"}"#);
         let item = row.to_item().expect("should convert");
         assert_eq!(item.content_type, ContentType::Text);
+    }
+
+    #[test]
+    fn a_stored_heading_is_kept_and_becomes_the_title() {
+        // The heading an operator typed used to be dropped on the way to the
+        // screen; it now survives the round-trip.
+        let row = record(
+            "text",
+            r#"{"kind":"text","heading":"Welcome","text":"Good morning everyone"}"#,
+        );
+        let item = row.to_item().expect("should convert");
+        assert_eq!(item.title, "Welcome");
+        assert!(matches!(
+            item.payload,
+            ContentPayload::Text {
+                ref heading,
+                ..
+            } if heading.as_deref() == Some("Welcome")
+        ));
+    }
+
+    #[test]
+    fn stored_media_keeps_its_kind_and_caption() {
+        // A file saved by an earlier build has no `kind`; it must still load
+        // and simply fall back to the file name as its label.
+        let legacy = record(
+            "image",
+            r#"{"kind":"media","path":"/tmp/slide.png","unexpected":true}"#,
+        );
+        let item = legacy.to_item().expect("should convert");
+        assert_eq!(item.title, "slide.png");
+        assert!(matches!(
+            item.payload,
+            ContentPayload::Media {
+                media_kind: None,
+                ..
+            }
+        ));
+
+        let row = record(
+            "video",
+            r#"{"kind":"media","path":"/tmp/clip.mp4","mediaKind":"video","heading":"Baptism"}"#,
+        );
+        let item = row.to_item().expect("should convert");
+        assert_eq!(item.content_type, ContentType::Video);
+        assert_eq!(item.title, "Baptism");
+    }
+
+    #[test]
+    fn a_picture_is_projected_without_a_caption_unless_one_is_given() {
+        let plain = PresentationItem::media(
+            "baptism.jpg",
+            "/tmp/baptism.jpg",
+            Some("image".to_string()),
+            None,
+        );
+        assert_eq!(plain.title, "baptism.jpg");
+        assert!(matches!(
+            plain.payload,
+            ContentPayload::Media { heading: None, .. }
+        ));
+
+        let captioned = PresentationItem::media(
+            "Baptism",
+            "/tmp/baptism.jpg",
+            Some("image".to_string()),
+            Some("Baptism".to_string()),
+        );
+        assert!(matches!(
+            captioned.payload,
+            ContentPayload::Media { ref heading, .. } if heading.as_deref() == Some("Baptism")
+        ));
+    }
+
+    #[test]
+    fn a_song_section_becomes_its_own_projectable_item() {
+        let item = PresentationItem::song_section(
+            "Amazing Grace",
+            Some("Verse 1".to_string()),
+            "Amazing grace, how sweet the sound".to_string(),
+            1,
+            3,
+        );
+        assert_eq!(item.content_type, ContentType::Song);
+        assert_eq!(item.title, "Amazing Grace — Verse 1");
+        assert!(matches!(
+            item.payload,
+            ContentPayload::Song { index: 1, total: 3, ref text, .. }
+                if text == "Amazing grace, how sweet the sound"
+        ));
     }
 }

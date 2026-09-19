@@ -12,6 +12,7 @@ pub mod media;
 pub mod presentation;
 pub mod scripture;
 pub mod settings;
+pub mod songs;
 pub mod speech;
 
 /// Every command handler registered on the Tauri builder.
@@ -63,6 +64,15 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send 
         media::list_media,
         media::import_media,
         media::remove_media,
+        media::browse_directory,
+        media::load_media_directory,
+        media::project_media,
+        // songs
+        songs::list_songs,
+        songs::get_song,
+        songs::save_song,
+        songs::delete_song,
+        songs::project_song,
         // settings
         settings::get_settings,
         settings::update_settings,

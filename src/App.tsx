@@ -12,6 +12,7 @@ import MediaPage from "@/pages/MediaPage";
 import PresentationsPage from "@/pages/PresentationsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import SetupPage from "@/pages/SetupPage";
+import SongsPage from "@/pages/SongsPage";
 
 /**
  * Operator application shell: sidebar navigation + routed pages.
@@ -65,6 +66,7 @@ export default function App() {
                   <Route path="/" element={<HomePage />} />
                   <Route path="/live" element={<LivePage />} />
                   <Route path="/bible" element={<BiblePage />} />
+                  <Route path="/songs" element={<SongsPage />} />
                   <Route path="/media" element={<MediaPage />} />
                   <Route path="/presentations" element={<PresentationsPage />} />
                   <Route path="/settings" element={<SettingsPage />} />

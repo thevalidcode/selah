@@ -112,8 +112,11 @@ export default function PresentationItemsPanel({
                   <Badge variant="muted">{item.typeName}</Badge>
                 </TableCell>
                 <TableCell className="max-w-md">
-                  <span className="selectable block truncate font-mono text-xs text-muted-foreground">
-                    {item.payload}
+                  <span className="block truncate text-sm">
+                    {describePayload(item.payload).heading}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {describePayload(item.payload).detail}
                   </span>
                 </TableCell>
                 <TableCell className="text-right">
@@ -145,4 +148,30 @@ export default function PresentationItemsPanel({
       )}
     </Panel>
   );
+}
+
+/**
+ * A readable summary of a stored item.
+ *
+ * Items are stored as JSON so new content kinds never need a schema change.
+ * Showing the raw JSON in the list made the heading the operator typed
+ * invisible, so it is unpacked here instead.
+ */
+function describePayload(payload: string): { heading: string; detail: string } {
+  try {
+    const parsed = JSON.parse(payload) as Record<string, unknown>;
+    const text = (value: unknown) =>
+      typeof value === "string" ? value.trim() : "";
+
+    const heading =
+      text(parsed.heading) || text(parsed.reference) || text(parsed.title);
+    const detail = text(parsed.text) || text(parsed.path) || payload;
+
+    return {
+      heading: heading || "No heading",
+      detail: detail.replace(/\s+/g, " ").slice(0, 120),
+    };
+  } catch {
+    return { heading: "Unreadable item", detail: payload.slice(0, 120) };
+  }
 }

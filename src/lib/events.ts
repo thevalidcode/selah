@@ -14,6 +14,7 @@ import type {
   PresentationChangedEvent,
   PresentationDisplayEvent,
   PresentationItem,
+  PresentationSettingsEvent,
   Transcript,
   VadSegmentEvent,
 } from "../types";
@@ -27,6 +28,7 @@ export const EVENTS = {
   speechTranscript: "speech://transcript",
   contentDetected: "content://detected",
   presentationChanged: "presentation://changed",
+  presentationSettings: "presentation://settings",
   presentationDisplayOpened: "presentation://display-opened",
   presentationDisplayClosed: "presentation://display-closed",
 } as const;
@@ -40,6 +42,7 @@ export type EventMap = {
   [EVENTS.speechTranscript]: Transcript;
   [EVENTS.contentDetected]: DetectionEvent;
   [EVENTS.presentationChanged]: PresentationChangedEvent;
+  [EVENTS.presentationSettings]: PresentationSettingsEvent;
   [EVENTS.presentationDisplayOpened]: PresentationDisplayEvent;
   [EVENTS.presentationDisplayClosed]: PresentationDisplayEvent;
 };

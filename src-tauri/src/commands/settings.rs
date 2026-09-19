@@ -33,31 +33,40 @@ pub struct UpdateSettingsRequest {
 #[tauri::command]
 pub fn update_settings(
     request: UpdateSettingsRequest,
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> CommandResult<AppSettings> {
-    // Apply audio device choice eagerly so capture can restart cleanly.
+    // Repair anything that would present badly (a truncated colour, an
+    // unreadable text size) before it is stored, so the projector can never be
+    // put into a state the operator cannot see their way out of.
+    let (presentation, repaired) = request.settings.presentation.sanitized();
+    if repaired {
+        tracing::warn!("presentation settings were out of range; safe values used");
+    }
+
+    let next = AppSettings {
+        presentation,
+        ..request.settings.clone()
+    };
+
+    // Apply speech changes to the live manager (recognizer swap / model load).
+    state.speech.reconfigure(&next.speech)?;
+
     {
         let mut settings = state
             .settings
             .lock()
             .map_err(|_| crate::errors::AppError::Internal("settings lock poisoned".to_string()))?;
-        *settings = request.settings.clone();
+        *settings = next.clone();
     }
     state.save_settings()?;
 
-    // Apply speech changes to the live manager (recognizer swap / model load).
-    let speech_settings = request.settings.speech.clone();
-    state.speech.reconfigure(&speech_settings)?;
+    // Make the save visible: select the screen, follow the fullscreen setting
+    // and tell the projector window about the new background, text size and
+    // typeface.
+    state.apply_presentation_settings(&app)?;
 
-    if let Ok(mut settings) = state.settings.lock() {
-        if let Some(display) = request.settings.presentation.display_index {
-            let _ = state.display.set_target(display);
-            settings.presentation.display_index = Some(display);
-        }
-    }
-    state.save_settings()?;
-
-    Ok(request.settings)
+    Ok(next)
 }
 
 #[tauri::command]

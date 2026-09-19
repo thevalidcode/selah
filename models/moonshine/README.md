@@ -15,8 +15,8 @@ models/moonshine/
 Any of these filename styles work, and the quantised file is preferred when
 both are present:
 
-| Slot | Accepted names (in order of preference) |
-|------|------------------------------------------|
+| Slot    | Accepted names (in order of preference)                                         |
+| ------- | ------------------------------------------------------------------------------- |
 | Encoder | `encoder_model_quantized.onnx`, `encoder_model_int8.onnx`, `encoder_model.onnx` |
 | Decoder | `decoder_model_quantized.onnx`, `decoder_model_int8.onnx`, `decoder_model.onnx` |
 
@@ -36,11 +36,11 @@ This catches almost everyone, so it is worth stating plainly.
 There are two different ways ONNX models get quantised to 8-bit, and they are
 not interchangeable:
 
-| Quantisation style | Ops in the graph | Runs on ONNX Runtime **CPU**? |
-|---|---|---|
-| **Dynamic quantisation** | `ConvInteger` | ❌ **No.** The CPU execution provider only implements `ConvInteger` for **uint8**, and these exports are **int8**. This style targets mobile NPUs (QNN / NNAPI). |
-| **QDQ / `_quantized`** | `QuantizeLinear` + `DequantizeLinear` + `MatMulInteger` | ✅ Yes |
-| **FP32** | plain `Conv` / `MatMul` | ✅ Yes |
+| Quantisation style       | Ops in the graph                                        | Runs on ONNX Runtime **CPU**?                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dynamic quantisation** | `ConvInteger`                                           | ❌ **No.** The CPU execution provider only implements `ConvInteger` for **uint8**, and these exports are **int8**. This style targets mobile NPUs (QNN / NNAPI). |
+| **QDQ / `_quantized`**   | `QuantizeLinear` + `DequantizeLinear` + `MatMulInteger` | ✅ Yes                                                                                                                                                           |
+| **FP32**                 | plain `Conv` / `MatMul`                                 | ✅ Yes                                                                                                                                                           |
 
 If you load a dynamic-quantised int8 export you will get an error like:
 

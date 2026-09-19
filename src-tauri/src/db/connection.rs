@@ -17,6 +17,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "fix_verse_triggers",
         sql: include_str!("../../migrations/0002_fix_verse_triggers.sql"),
     },
+    Migration {
+        version: 3,
+        name: "songs_and_media",
+        sql: include_str!("../../migrations/0003_songs_and_media.sql"),
+    },
 ];
 
 /// A single ordered schema migration.

@@ -12,4 +12,5 @@ export * as mediaApi from "./media";
 export * as presentationApi from "./presentation";
 export * as scriptureApi from "./scripture";
 export * as settingsApi from "./settings";
+export * as songsApi from "./songs";
 export * as speechApi from "./speech";

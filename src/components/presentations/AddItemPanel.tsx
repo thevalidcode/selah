@@ -33,28 +33,35 @@ export default function AddItemPanel({
   onError: (message: string | null) => void;
 }) {
   const [type, setType] = useState("text");
-  const [title, setTitle] = useState("");
+  const [heading, setHeading] = useState("");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function add() {
-    if (!presentationId || title.trim().length === 0) {
+    if (!presentationId || heading.trim().length === 0) {
       return;
     }
     setSaving(true);
     try {
+      // The heading travels inside the payload, which is what keeps it on the
+      // projector later: the list row stores JSON, not a separate column.
       const payload =
         type === "scripture"
           ? JSON.stringify({
               kind: "scripture",
-              reference: title.trim(),
+              reference: heading.trim(),
               translation: "",
+              heading: heading.trim(),
               text: body,
             })
-          : JSON.stringify({ kind: "text", text: body });
+          : JSON.stringify({
+              kind: "text",
+              heading: heading.trim(),
+              text: body,
+            });
 
       await presentationApi.addPresentationItem(presentationId, type, payload);
-      setTitle("");
+      setHeading("");
       setBody("");
       onError(null);
       onAdded();
@@ -91,10 +98,15 @@ export default function AddItemPanel({
               </Label>
               <Input
                 id="item-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={type === "scripture" ? "John 3:16" : "Welcome"}
+                value={heading}
+                onChange={(e) => setHeading(e.target.value)}
+                placeholder={
+                  type === "scripture" ? "John 3:16" : "Welcome everyone"
+                }
               />
+              <p className="text-xs text-muted-foreground">
+                This is the heading shown above the words on the screen.
+              </p>
             </div>
           </div>
 
@@ -111,7 +123,7 @@ export default function AddItemPanel({
           <div className="flex items-center gap-3">
             <Button
               variant="success"
-              disabled={busy || saving || title.trim().length === 0}
+              disabled={busy || saving || heading.trim().length === 0}
               onClick={() => void add()}
             >
               <Plus className="size-4" />

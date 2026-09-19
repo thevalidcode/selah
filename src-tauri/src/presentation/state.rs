@@ -69,6 +69,7 @@ mod tests {
             content_type: crate::models::presentation::ContentType::Text,
             title: title.to_string(),
             payload: ContentPayload::Text {
+                heading: Some(title.to_string()),
                 text: title.to_string(),
             },
         }

@@ -370,6 +370,33 @@ impl<'a> MediaRepository<'a> {
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
+    /// Looks up a registered file by its path.
+    ///
+    /// Media files are read from a folder rather than added one at a time, so
+    /// this is what keeps a repeated folder scan from creating duplicates.
+    pub fn find_by_path(&self, path: &str) -> Result<Option<MediaItem>, AppError> {
+        self.conn
+            .query_row(
+                "SELECT id, type, name, path, metadata, created_at FROM media WHERE path = ?1",
+                [path],
+                |row| {
+                    let metadata: Option<String> = row.get(4)?;
+                    Ok(MediaItem {
+                        id: row.get(0)?,
+                        kind: row.get(1)?,
+                        name: row.get(2)?,
+                        path: row.get(3)?,
+                        metadata: metadata.map(|m| {
+                            serde_json::from_str(&m).unwrap_or_else(|_| serde_json::json!({}))
+                        }),
+                        created_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
     pub fn insert(&self, item: &MediaItem) -> Result<(), AppError> {
         let metadata = item
             .metadata

@@ -22,6 +22,7 @@ pub mod media;
 pub mod models;
 pub mod presentation;
 pub mod scripture;
+pub mod songs;
 pub mod speech;
 pub mod state;
 pub mod storage;

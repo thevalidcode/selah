@@ -16,7 +16,8 @@ export type ContentType =
   | "image"
   | "video"
   | "announcement"
-  | "slide";
+  | "slide"
+  | "song";
 
 /** A structurally valid Scripture reference (never stored as a string). */
 export interface ScriptureReference {
@@ -125,10 +126,35 @@ export interface Passage {
 
 // ------------------------------------------------------------- presentation
 
+export type MediaKind = "image" | "video" | "audio";
+
 export type ContentPayload =
-  | { kind: "scripture"; reference: string; translation: string; text: string }
-  | { kind: "text"; text: string }
-  | { kind: "media"; path: string };
+  | {
+      kind: "scripture";
+      reference: string;
+      translation: string;
+      text: string;
+      /** Operator-supplied heading; wins over the reference on screen. */
+      heading?: string;
+    }
+  | { kind: "text"; heading?: string; text: string }
+  | {
+      kind: "media";
+      path: string;
+      /** Absent for files registered by an earlier build. */
+      mediaKind?: MediaKind;
+      /** Optional caption drawn over the media. */
+      heading?: string;
+    }
+  | {
+      kind: "song";
+      title: string;
+      label?: string;
+      text: string;
+      /** 1-based position of this section within the song. */
+      index: number;
+      total: number;
+    };
 
 export interface PresentationItem {
   id: string;
@@ -180,6 +206,65 @@ export interface MediaItem {
   createdAt: string;
 }
 
+/** One row in the media folder picker. */
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  /** `image` / `video` / `audio` for files Selah can present. */
+  mediaKind?: MediaKind;
+}
+
+/** The contents of one folder, as listed by the media folder picker. */
+export interface DirectoryListing {
+  path: string;
+  parent?: string;
+  entries: DirectoryEntry[];
+}
+
+/** The result of loading a folder into the media library. */
+export interface MediaScan {
+  directory: string;
+  /** Files registered for the first time by this scan. */
+  added: number;
+  /** Media files now known inside the folder. */
+  total: number;
+  items: MediaItem[];
+}
+
+// -------------------------------------------------------------------- songs
+
+/** One section of a song (verse, chorus, bridge…). */
+export interface SongSection {
+  id: string;
+  label?: string;
+  text: string;
+  /** 1-based order within the song. */
+  position: number;
+}
+
+export interface Song {
+  id: string;
+  title: string;
+  author?: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Absent in the library list; present when one song is loaded. */
+  sections?: SongSection[];
+}
+
+/** A section as sent to the backend (the store assigns ids). */
+export interface SongSectionInput {
+  label?: string;
+  text: string;
+}
+
+export interface SongInput {
+  title: string;
+  author?: string;
+  sections: SongSectionInput[];
+}
+
 // ----------------------------------------------------------------- settings
 
 export interface AppSettings {
@@ -205,7 +290,14 @@ export interface AppSettings {
     fullscreen: boolean;
     background: string;
     fontSize: number;
+    /** Projected typeface; one of the bundled families (see `lib/fonts`). */
+    fontFamily: string;
     followLive: boolean;
+  };
+  /** Where the media library reads files from (chosen at runtime). */
+  media: {
+    directory?: string;
+    recursive: boolean;
   };
 }
 
@@ -236,6 +328,15 @@ export interface PresentationChangedEvent {
 export interface PresentationDisplayEvent {
   open: boolean;
   display?: string;
+}
+
+/** Payload of `presentation://settings` — how projected content should look. */
+export interface PresentationSettingsEvent {
+  background: string;
+  fontSize: number;
+  fontFamily: string;
+  fullscreen: boolean;
+  followLive: boolean;
 }
 
 /** Serialized error payload returned by failing commands. */

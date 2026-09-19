@@ -58,6 +58,46 @@
   font-display: swap;
 }
 
+/*
+ * Extra projector typefaces, so the projected words can be changed to suit the
+ * room (see the font picker in Settings → Screen).
+ *
+ * All four are licensed under the SIL Open Font License 1.1 and are bundled
+ * rather than fetched — Selah must work with no network connection. License
+ * texts live in `src/fonts/licenses/`.
+ */
+@font-face {
+  font-family: "Inter";
+  src: url("./fonts/Inter-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Lora";
+  src: url("./fonts/Lora-Variable.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Oswald";
+  src: url("./fonts/Oswald-Variable.woff2") format("woff2");
+  font-weight: 200 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./fonts/JetBrainsMono-Variable.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 
 /* ------------------------------------------------------------------ tokens */
 
@@ -313,20 +353,47 @@
  */
 
 @layer components {
+  /*
+   * The projector draws everything from these variables, which the presentation
+   * window sets from the saved settings (`src/presentation/main.tsx`). That is
+   * what makes the Settings controls — background colour, text size, typeface —
+   * actually change what the congregation sees.
+   */
   .pres-shell {
-    @apply grid h-full w-full place-items-center overflow-hidden bg-black px-[6vw] py-[5vh];
+    @apply grid h-full w-full place-items-center overflow-hidden;
+    background: var(--pres-bg, #000000);
+    color: var(--pres-fg, #ffffff);
+    font-family: var(--pres-font, "Creato Display"), system-ui, sans-serif;
+    padding: 5vh 6vw;
   }
 
   .pres-shell--idle {
-    @apply bg-black;
+    background: var(--pres-bg, #000000);
   }
 
   .pres-shell--media {
-    @apply bg-black p-0;
+    @apply p-0;
+    background: var(--pres-bg, #000000);
   }
 
   .pres-media {
     @apply h-full w-full object-contain;
+  }
+
+  .pres-media__caption {
+    @apply pointer-events-none absolute inset-x-0 bottom-0 px-[4vw] pt-[6vh] pb-[4vh] text-center;
+    /* A soft gradient keeps the caption readable over a bright photo. */
+    background: linear-gradient(to top, rgb(0 0 0 / 55%), transparent);
+  }
+
+  /* Audio has nothing to look at, so it gets a card instead of a black hole. */
+  .pres-audio {
+    @apply flex flex-col items-center justify-center gap-[4vh] text-center;
+  }
+
+  .pres-audio__icon {
+    @apply text-[3rem];
+    color: var(--pres-fg-muted, rgb(255 255 255 / 45%));
   }
 
   .pres-idle {
@@ -334,42 +401,61 @@
   }
 
   .pres-idle__mark {
-    @apply text-sm font-bold tracking-[0.5em] text-white/35;
+    @apply text-sm font-bold tracking-[0.5em];
+    color: var(--pres-fg-muted, rgb(255 255 255 / 45%));
   }
 
   .pres-idle__hint {
-    @apply text-sm text-white/30;
+    @apply text-sm;
+    color: var(--pres-fg-muted, rgb(255 255 255 / 45%));
   }
 
   .pres-scripture {
     @apply flex h-full w-full flex-col items-center justify-center gap-[4vh] text-center;
   }
 
-  .pres-scripture__head {
+  .pres-content__head {
     @apply flex flex-col items-center gap-2;
   }
 
-  .pres-scripture__reference {
-    @apply text-[clamp(2rem,5vw,4.5rem)] font-semibold uppercase tracking-[0.12em] text-white;
+  /* A heading the operator typed (or the verse reference). */
+  .pres-content__heading {
+    @apply font-semibold uppercase tracking-[0.12em];
+    font-size: calc(var(--pres-size, 64px) * 1.3);
   }
 
-  .pres-scripture__translation {
-    @apply text-[clamp(0.75rem,1.1vw,1rem)] font-medium uppercase tracking-[0.35em] text-white/45;
+  .pres-content__label {
+    @apply font-medium uppercase tracking-[0.35em];
+    font-size: calc(var(--pres-size, 64px) * 0.4);
+    color: var(--pres-fg-muted, rgb(255 255 255 / 45%));
   }
 
-  .pres-scripture__text {
-    @apply max-w-[62ch] text-[clamp(1.5rem,3.1vw,3.25rem)] font-light leading-[1.35] text-white/95;
+  .pres-content__text {
+    @apply font-light;
+    max-width: 62ch;
+    font-size: var(--pres-size, 64px);
+    line-height: 1.35;
+  }
+
+  .pres-content__counter {
+    @apply font-medium tracking-[0.3em];
+    font-size: calc(var(--pres-size, 64px) * 0.35);
+    color: var(--pres-fg-muted, rgb(255 255 255 / 45%));
   }
 
   .pres-text {
-    @apply flex flex-col items-center gap-[3vh] text-center;
+    @apply flex h-full w-full flex-col items-center justify-center gap-[3vh] text-center;
   }
 
   .pres-text__title {
-    @apply text-[clamp(1.75rem,4vw,3.5rem)] font-semibold tracking-[0.08em] text-white;
+    @apply font-semibold tracking-[0.06em];
+    font-size: calc(var(--pres-size, 64px) * 1.25);
   }
 
   .pres-text__body {
-    @apply max-w-[60ch] text-[clamp(1.25rem,2.6vw,2.75rem)] font-light leading-[1.4] text-white/95;
+    @apply font-light;
+    max-width: 60ch;
+    font-size: var(--pres-size, 64px);
+    line-height: 1.4;
   }
 }

@@ -66,13 +66,34 @@ impl Default for SpeechSettings {
     }
 }
 
+/// Font family the projector draws with when a setting does not name one.
+pub fn default_font_family() -> String {
+    "Creato Display".to_string()
+}
+
+/// Background colour the projector falls back to when none is set.
+pub fn default_background() -> String {
+    "#000000".to_string()
+}
+
+/// Text size (in CSS pixels) the projector falls back to when none is set.
+pub fn default_font_size() -> u32 {
+    64
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PresentationSettings {
     pub display_index: Option<usize>,
     pub fullscreen: bool,
+    #[serde(default = "default_background")]
     pub background: String,
+    #[serde(default = "default_font_size")]
     pub font_size: u32,
+    /// Family used for projected text. Matched against the frontend font
+    /// catalog, so a stale value simply falls back to the interface default.
+    #[serde(default = "default_font_family")]
+    pub font_family: String,
     pub follow_live: bool,
 }
 
@@ -81,11 +102,25 @@ impl Default for PresentationSettings {
         Self {
             display_index: None,
             fullscreen: true,
-            background: "#000000".to_string(),
-            font_size: 64,
+            background: default_background(),
+            font_size: default_font_size(),
+            font_family: default_font_family(),
             follow_live: true,
         }
     }
+}
+
+/// Where the media library reads files from.
+///
+/// Nothing is hardcoded: the operator picks a folder at runtime and Selah
+/// remembers it, so the same installation works on any machine.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaSettings {
+    /// Folder chosen by the operator. `None` until they pick one.
+    pub directory: Option<String>,
+    /// Whether sub-folders are read as well.
+    pub recursive: bool,
 }
 
 impl PresentationSettings {
@@ -107,6 +142,10 @@ impl PresentationSettings {
         }
         if !(MIN_FONT_SIZE..=MAX_FONT_SIZE).contains(&self.font_size) {
             fixed.font_size = Self::default().font_size;
+            changed = true;
+        }
+        if self.font_family.trim().is_empty() {
+            fixed.font_family = Self::default().font_family;
             changed = true;
         }
 
@@ -134,6 +173,9 @@ pub struct AppSettings {
     pub audio: AudioSettings,
     pub speech: SpeechSettings,
     pub presentation: PresentationSettings,
+    /// Where the media library reads files from (chosen at runtime).
+    #[serde(default)]
+    pub media: MediaSettings,
 }
 
 impl Default for AppSettings {
@@ -159,6 +201,7 @@ impl Default for AppSettings {
                 speech_sample_rate: 16_000,
             },
             presentation: PresentationSettings::default(),
+            media: MediaSettings::default(),
         }
     }
 }
@@ -210,15 +253,36 @@ mod tests {
             fullscreen: false,
             background: "#06666".to_string(),
             font_size: 10,
+            font_family: "   ".to_string(),
             follow_live: true,
         };
         let (fixed, changed) = broken.sanitized();
         assert!(changed);
         assert_eq!(fixed.background, "#000000");
         assert_eq!(fixed.font_size, 64);
+        assert_eq!(fixed.font_family, "Creato Display");
         // Fields that were already valid are left alone.
         assert!(!fixed.fullscreen);
         assert!(fixed.follow_live);
+    }
+
+    #[test]
+    fn settings_written_before_fonts_and_media_existed_still_load() {
+        // A settings document from an earlier build names neither a font nor a
+        // media folder; both must fall back to defaults rather than fail.
+        let json = r##"{
+            "general": { "appName": "Selah", "defaultTranslationId": null, "theme": "dark" },
+            "audio": { "inputDeviceId": null, "sampleRate": 0 },
+            "speech": { "recognizer": "mock", "modelPath": null, "language": null,
+                        "threads": 4, "vadEnabled": true, "speechSampleRate": 16000 },
+            "presentation": { "displayIndex": null, "fullscreen": true,
+                              "background": "#101010", "fontSize": 72, "followLive": true }
+        }"##;
+        let s: AppSettings = serde_json::from_str(json).unwrap();
+        assert_eq!(s.presentation.font_family, "Creato Display");
+        assert_eq!(s.presentation.font_size, 72);
+        assert_eq!(s.media.directory, None);
+        assert!(!s.media.recursive);
     }
 
     #[test]

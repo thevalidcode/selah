@@ -4,6 +4,7 @@ import {
   FolderOpen,
   Home,
   Images,
+  Music,
   Presentation,
   Radio,
   Settings,
@@ -41,6 +42,7 @@ const GROUPS: NavGroup[] = [
     label: "Library",
     items: [
       { to: "/bible", label: "Bible", icon: FolderOpen },
+      { to: "/songs", label: "Songs", icon: Music },
       { to: "/media", label: "Media", icon: Images },
       { to: "/presentations", label: "Presentations", icon: Presentation },
     ],

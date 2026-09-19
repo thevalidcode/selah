@@ -11,6 +11,8 @@ export function friendlyContentType(type: string): string {
       return "Bible verse";
     case "lyrics":
       return "song words";
+    case "song":
+      return "song";
     case "announcement":
       return "notice";
     case "slide":
