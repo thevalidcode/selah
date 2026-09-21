@@ -223,6 +223,24 @@ pub struct PresentationSettings {
     /// The operator's own logo and line of text, drawn on every projected item.
     #[serde(default)]
     pub branding: BrandingSettings,
+    /// Whether a video starts again when it reaches the end (or the end of the
+    /// time range chosen for it on the Media screen).
+    ///
+    /// This is the default the per-file choice on the Media screen starts from,
+    /// so a church that always wants video to loop sets it once; a church that
+    /// would rather it stop on its last frame sets it the other way and nothing
+    /// else needs touching.
+    #[serde(default = "default_repeat_videos")]
+    pub repeat_videos: bool,
+}
+
+/// Whether video repeats by default.
+///
+/// On, because a projected background loop that stops the moment it ends is
+/// usually a mistake rather than a decision — and because it is what Selah did
+/// before the choice existed.
+pub fn default_repeat_videos() -> bool {
+    true
 }
 
 impl Default for PresentationSettings {
@@ -235,6 +253,7 @@ impl Default for PresentationSettings {
             font_family: default_font_family(),
             follow_live: true,
             branding: BrandingSettings::default(),
+            repeat_videos: default_repeat_videos(),
         }
     }
 }
@@ -391,6 +410,9 @@ mod tests {
             font_family: "   ".to_string(),
             follow_live: true,
             branding: BrandingSettings::default(),
+            // A settings document written before the choice existed has no
+            // `repeatVideos` key at all; `serde` fills the default in.
+            repeat_videos: crate::models::settings::default_repeat_videos(),
         };
         let (fixed, changed) = broken.sanitized();
         assert!(changed);
@@ -400,6 +422,28 @@ mod tests {
         // Fields that were already valid are left alone.
         assert!(!fixed.fullscreen);
         assert!(fixed.follow_live);
+    }
+
+    #[test]
+    fn a_settings_document_without_the_repeat_choice_still_loads() {
+        // Settings written by an earlier build have no `repeatVideos` key at
+        // all. Video must keep looping the way it always did, rather than
+        // silently starting to stop on its last frame.
+        let json = r##"{
+            "presentation": { "displayIndex": null, "fullscreen": true,
+                              "background": "#101010", "fontSize": 72, "followLive": true }
+        }"##;
+        let settings: AppSettings = serde_json::from_str(json).unwrap();
+        assert!(settings.presentation.repeat_videos);
+
+        // An explicit choice — including "stop at the end" — is what is kept.
+        let off = r##"{
+            "presentation": { "displayIndex": null, "fullscreen": true,
+                              "background": "#101010", "fontSize": 72, "followLive": true,
+                              "repeatVideos": false }
+        }"##;
+        let settings: AppSettings = serde_json::from_str(off).unwrap();
+        assert!(!settings.presentation.repeat_videos);
     }
 
     #[test]

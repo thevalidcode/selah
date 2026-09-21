@@ -262,7 +262,9 @@ export default function AddTranslationPanel({
     return [...byGroup.entries()].sort((a, b) => {
       const left = order.indexOf(a[0]);
       const right = order.indexOf(b[0]);
-      return (left < 0 ? order.length : left) - (right < 0 ? order.length : right);
+      return (
+        (left < 0 ? order.length : left) - (right < 0 ? order.length : right)
+      );
     });
   }, [filtered]);
 
@@ -277,8 +279,8 @@ export default function AddTranslationPanel({
             <p className="text-xs text-muted-foreground">
               These are published Bibles, listed so the name always matches.
               Selah does not download Bible text and does not ship any — adding
-              one here creates it, ready for verses you add on the right (from
-              a file you own, or pasted using the prompt Selah writes).
+              one here creates it, ready for verses you add on the right (from a
+              file you own, or pasted using the prompt Selah writes).
             </p>
 
             <div className="relative">
@@ -298,61 +300,63 @@ export default function AddTranslationPanel({
                   <EmptyHint>No translation matches that search.</EmptyHint>
                 ) : null}
 
-                {groups.map(([group, entries]) => (
-                  <div key={group} className="space-y-1">
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      {group}
-                    </p>
-                    <ul className="space-y-1">
-                      {entries.map((entry) => (
-                        <li
-                          key={entry.id}
-                          className="flex items-center gap-2 rounded-md border border-border/60 px-2.5 py-1.5"
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-1.5">
-                              <span className="truncate text-sm">
-                                {entry.name}
+                <div className="space-y-3 overflow-y-auto max-h-96 pr-1">
+                  {groups.map(([group, entries]) => (
+                    <div key={group} className="space-y-1">
+                      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                        {group}
+                      </p>
+                      <ul className="space-y-1">
+                        {entries.map((entry) => (
+                          <li
+                            key={entry.id}
+                            className="flex items-center gap-2 rounded-md border border-border/60 px-2.5 py-1.5"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-1.5">
+                                <span className="truncate text-sm">
+                                  {entry.name}
+                                </span>
+                                <span className="shrink-0 text-xs text-muted-foreground">
+                                  {entry.abbreviation}
+                                </span>
+                                {entry.builtin ? (
+                                  <ShieldCheck
+                                    className="size-3.5 shrink-0 text-muted-foreground"
+                                    aria-label="Comes with Selah"
+                                  />
+                                ) : null}
                               </span>
-                              <span className="shrink-0 text-xs text-muted-foreground">
-                                {entry.abbreviation}
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {entry.installed
+                                  ? entry.verseCount > 0
+                                    ? `${entry.verseCount} verses stored`
+                                    : "added, no verses yet"
+                                  : entry.publicDomain
+                                    ? "public domain"
+                                    : "published translation"}
                               </span>
-                              {entry.builtin ? (
-                                <ShieldCheck
-                                  className="size-3.5 shrink-0 text-muted-foreground"
-                                  aria-label="Comes with Selah"
-                                />
-                              ) : null}
                             </span>
-                            <span className="block truncate text-xs text-muted-foreground">
-                              {entry.installed
-                                ? entry.verseCount > 0
-                                  ? `${entry.verseCount} verses stored`
-                                  : "added, no verses yet"
-                                : entry.publicDomain
-                                  ? "public domain"
-                                  : "published translation"}
-                            </span>
-                          </span>
 
-                          {entry.installed ? (
-                            <Badge variant="success">added</Badge>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={busy || entry.builtin}
-                              onClick={() => void add({ id: entry.id })}
-                            >
-                              <Plus className="size-3.5" />
-                              Add
-                            </Button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                            {entry.installed ? (
+                              <Badge variant="success">added</Badge>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={busy || entry.builtin}
+                                onClick={() => void add({ id: entry.id })}
+                              >
+                                <Plus className="size-3.5" />
+                                Add
+                              </Button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
               </div>
             </ScrollArea>
           </div>
@@ -420,135 +424,139 @@ export default function AddTranslationPanel({
           <p className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
             {notice}
 
-        <Panel
-          title="Verses to store"
-          actions={
-            target ? (
-              <Badge variant="muted">{target.translation.name}</Badge>
-            ) : (
-              <Badge variant="warning">no translation yet</Badge>
-            )
-          }
-        >
-          <div className="space-y-3">
-            {writableTranslations.length === 0 ? (
-              <p className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-                Add a translation first — Selah will not write into the Bibles
-                that come with it.
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                <Label htmlFor="verse-translation">Which translation</Label>
-                <Select value={translationId} onValueChange={setTranslationId}>
-                  <SelectTrigger id="verse-translation">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {writableTranslations.map((status) => (
-                      <SelectItem
-                        key={status.translation.id}
-                        value={status.translation.id}
-                      >
-                        {status.translation.name} · {status.verseCount} verses
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <Panel
+              title="Verses to store"
+              actions={
+                target ? (
+                  <Badge variant="muted">{target.translation.name}</Badge>
+                ) : (
+                  <Badge variant="warning">no translation yet</Badge>
+                )
+              }
+            >
+              <div className="space-y-3">
+                {writableTranslations.length === 0 ? (
+                  <p className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
+                    Add a translation first — Selah will not write into the
+                    Bibles that come with it.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="verse-translation">Which translation</Label>
+                    <Select
+                      value={translationId}
+                      onValueChange={setTranslationId}
+                    >
+                      <SelectTrigger id="verse-translation">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {writableTranslations.map((status) => (
+                          <SelectItem
+                            key={status.translation.id}
+                            value={status.translation.id}
+                          >
+                            {status.translation.name} · {status.verseCount}{" "}
+                            verses
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <SwitchRow
-                label="Enter one verse"
-                hint="The words of a single verse, typed by hand."
-                checked={mode === "single"}
-                onChecked={() => setMode("single")}
-              />
-              <SwitchRow
-                label="Paste a whole chapter"
-                hint="An array of verses, one object per verse."
-                checked={mode === "chapter"}
-                onChecked={() => setMode("chapter")}
-              />
-            </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SwitchRow
+                    label="Enter one verse"
+                    hint="The words of a single verse, typed by hand."
+                    checked={mode === "single"}
+                    onChecked={() => setMode("single")}
+                  />
+                  <SwitchRow
+                    label="Paste a whole chapter"
+                    hint="An array of verses, one object per verse."
+                    checked={mode === "chapter"}
+                    onChecked={() => setMode("chapter")}
+                  />
+                </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-3 space-y-1.5">
-                <Label htmlFor="verse-book">Book</Label>
-                <Select value={book} onValueChange={setBook}>
-                  <SelectTrigger id="verse-book">
-                    <SelectValue placeholder="Choose a book" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {books.map((entry) => (
-                      <SelectItem key={entry.id} value={entry.name}>
-                        {entry.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-3 space-y-1.5">
+                    <Label htmlFor="verse-book">Book</Label>
+                    <Select value={book} onValueChange={setBook}>
+                      <SelectTrigger id="verse-book">
+                        <SelectValue placeholder="Choose a book" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {books.map((entry) => (
+                          <SelectItem key={entry.id} value={entry.name}>
+                            {entry.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="verse-chapter">Chapter</Label>
+                    <Input
+                      id="verse-chapter"
+                      type="number"
+                      min={1}
+                      max={chapterCount}
+                      value={chapter}
+                      onChange={(event) =>
+                        setChapter(Math.max(1, Number(event.target.value) || 1))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="verse-number">Verse</Label>
+                    <Input
+                      id="verse-number"
+                      type="number"
+                      min={1}
+                      value={verse}
+                      disabled={mode === "chapter"}
+                      onChange={(event) =>
+                        setVerse(Math.max(1, Number(event.target.value) || 1))
+                      }
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <p className="text-xs text-muted-foreground">
+                      {selectedBook
+                        ? `${chapterCount} chapters`
+                        : "pick a book"}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="verse-chapter">Chapter</Label>
-                <Input
-                  id="verse-chapter"
-                  type="number"
-                  min={1}
-                  max={chapterCount}
-                  value={chapter}
-                  onChange={(event) =>
-                    setChapter(Math.max(1, Number(event.target.value) || 1))
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="verse-number">Verse</Label>
-                <Input
-                  id="verse-number"
-                  type="number"
-                  min={1}
-                  value={verse}
-                  disabled={mode === "chapter"}
-                  onChange={(event) =>
-                    setVerse(Math.max(1, Number(event.target.value) || 1))
-                  }
-                />
-              </div>
-              <div className="flex items-end">
-                <p className="text-xs text-muted-foreground">
-                  {selectedBook ? `${chapterCount} chapters` : "pick a book"}
-                </p>
-              </div>
-            </div>
-          </div>
-        </Panel>
+            </Panel>
 
-        {saved ? (
-          <Panel title="Saved">
-            <div className="space-y-1.5">
-              <p className="flex items-center gap-2 text-sm font-medium text-success">
-                <CheckCircle2 className="size-4" />
-                {saved.reference}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {saved.versesSaved} verse
-                {saved.versesSaved === 1 ? "" : "s"} added. Look them up on the
-                Look up tab — the translation appears in the Bible list.
-              </p>
-              {saved.missingVerses.length > 0 ? (
-                <p className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-                  Verse{saved.missingVerses.length === 1 ? "" : "s"}{" "}
-                  {saved.missingVerses.join(", ")} were not included. That is
-                  fine — the rest is saved.
-                </p>
-              ) : null}
-            </div>
-          </Panel>
-        ) : null}
-
+            {saved ? (
+              <Panel title="Saved">
+                <div className="space-y-1.5">
+                  <p className="flex items-center gap-2 text-sm font-medium text-success">
+                    <CheckCircle2 className="size-4" />
+                    {saved.reference}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {saved.versesSaved} verse
+                    {saved.versesSaved === 1 ? "" : "s"} added. Look them up on
+                    the Look up tab — the translation appears in the Bible list.
+                  </p>
+                  {saved.missingVerses.length > 0 ? (
+                    <p className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
+                      Verse{saved.missingVerses.length === 1 ? "" : "s"}{" "}
+                      {saved.missingVerses.join(", ")} were not included. That
+                      is fine — the rest is saved.
+                    </p>
+                  ) : null}
+                </div>
+              </Panel>
+            ) : null}
           </p>
         ) : null}
-
 
         {mode === "single" ? (
           <SingleVerseEditor
@@ -915,7 +923,6 @@ function SingleVerseEditor({
   );
 }
 
-
 /**
  * The whole-chapter editor.
  *
@@ -1034,7 +1041,11 @@ function ChapterPasteEditor({
           </details>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="success" disabled={busy || !ready} onClick={onSave}>
+            <Button
+              variant="success"
+              disabled={busy || !ready}
+              onClick={onSave}
+            >
               <Wand2 className="size-4" />
               Check and save the chapter
             </Button>

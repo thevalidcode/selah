@@ -1,6 +1,8 @@
 import { command } from "./client";
 import type {
   DirectoryListing,
+  MediaClip,
+  MediaClipRequest,
   MediaItem,
   MediaPlaybackAction,
   MediaPlaybackState,
@@ -51,13 +53,58 @@ export function removeMedia(id: string): Promise<void> {
   return command<void>("remove_media", { id });
 }
 
-/** Puts a media file on the congregation's screen. */
+/**
+ * Puts a media file on the congregation's screen.
+ *
+ * `clip` is the part of a video to show, and whether it starts again when it
+ * reaches the end. Leaving it out plays the file whole and lets the saved Screen
+ * setting answer the "stop or repeat" question.
+ */
 export function projectMedia(
   path: string,
   title?: string,
+  clip?: MediaClipRequest,
 ): Promise<PresentationState> {
   return command<PresentationState>("project_media", {
-    request: { path, title: title ?? null },
+    request: {
+      path,
+      title: title ?? null,
+      clip: clip
+        ? {
+            startMs: Math.max(0, Math.round(clip.startMs ?? 0)),
+            endMs:
+              clip.endMs === undefined ? null : Math.max(0, Math.round(clip.endMs)),
+            // `null` (not `false`) when nothing was chosen, so the saved setting
+            // decides — the same answer Show gives without a preview.
+            repeat: clip.repeat ?? null,
+          }
+        : null,
+    },
+  });
+}
+
+/**
+ * Remembers which part of a video to show, for next time.
+ *
+ * The choice is kept with the file in the library, so reopening Selah — or
+ * pressing Show later — brings the same range and repeat choice back. Passing
+ * `null` forgets the range and plays the file whole again.
+ */
+export function setMediaClip(
+  id: string,
+  clip: MediaClip | null,
+): Promise<MediaItem> {
+  return command<MediaItem>("set_media_clip", {
+    request: {
+      id,
+      clip: clip
+        ? {
+            startMs: Math.max(0, Math.round(clip.startMs)),
+            endMs: clip.endMs === undefined ? null : Math.round(clip.endMs),
+            repeat: clip.repeat,
+          }
+        : null,
+    },
   });
 }
 

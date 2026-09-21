@@ -52,6 +52,64 @@ impl ContentType {
     }
 }
 
+/// How a video should be played.
+///
+/// A service rarely wants a whole clip: the operator scrubs to the part they
+/// want (6s → 30s) and lets it run. The range travels with the projected item,
+/// so the projector window knows where to begin and when to stop without any
+/// access to the media library or the database.
+///
+/// A clip with no range — `start_ms: 0`, `end_ms: None` — is still meaningful:
+/// it carries the operator's "when it reaches the end, stop / start again"
+/// choice for the whole file, which is what the Screen setting holds by
+/// default.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MediaClip {
+    /// Where playback begins, in milliseconds from the start of the file.
+    pub start_ms: u64,
+    /// Where playback ends. `None` runs to the end of the file.
+    pub end_ms: Option<u64>,
+    /// Whether playback starts again at `start_ms` instead of stopping.
+    pub repeat: bool,
+}
+
+/// Shortest range Selah will honour; anything shorter is a mis-click.
+const MIN_CLIP_MS: u64 = 500;
+
+impl MediaClip {
+    /// The clip as the projector will honour it.
+    ///
+    /// A range that ends before it begins (a slip of the end slider) would
+    /// leave the player stuck on one frame, so it becomes "run to the end"
+    /// instead of being passed on.
+    pub fn sanitized(self) -> Self {
+        let end_ms = self.end_ms.filter(|end| *end > self.start_ms + MIN_CLIP_MS);
+        Self { end_ms, ..self }
+    }
+
+    /// True when the clip covers the whole file.
+    pub fn is_whole_file(&self) -> bool {
+        self.start_ms == 0 && self.end_ms.is_none()
+    }
+
+    /// Reads a clip back out of a media record's metadata.
+    ///
+    /// Media metadata is free-form JSON, so an unreadable or partial value is
+    /// treated as "no range chosen" rather than failing the screen that asked.
+    pub fn from_metadata(metadata: Option<&serde_json::Value>) -> Option<Self> {
+        let value = metadata?.get("clip")?;
+        serde_json::from_value::<Self>(value.clone())
+            .ok()
+            .map(Self::sanitized)
+    }
+
+    /// The metadata value written for this clip.
+    pub fn to_metadata_value(self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 /// The payload of a presentation item. Tagged so the payload can be extended
 /// without changing the presentation engine.
 ///
@@ -97,6 +155,18 @@ pub enum ContentPayload {
         /// Optional caption shown over the media.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         heading: Option<String>,
+        /// Where playback begins, in milliseconds. Absent means the beginning,
+        /// which is what every file registered before time ranges existed has.
+        #[serde(default, rename = "startMs", skip_serializing_if = "Option::is_none")]
+        start_ms: Option<u64>,
+        /// Where playback ends, in milliseconds. Absent runs to the end.
+        #[serde(default, rename = "endMs", skip_serializing_if = "Option::is_none")]
+        end_ms: Option<u64>,
+        /// Whether a **video** starts again when it reaches the end (or the end
+        /// of the chosen range). Absent for pictures and sound, which never
+        /// repeat; the projector then follows the saved Screen setting.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        repeat: Option<bool>,
     },
     /// One section of a song (verse, chorus, bridge...). Songs are stepped
     /// through section by section, exactly like verses of Scripture.
@@ -196,7 +266,26 @@ impl PresentationItem {
         kind: Option<String>,
         heading: Option<String>,
     ) -> Self {
+        Self::media_clipped(title, path, kind, heading, None)
+    }
+
+    /// A media file the operator chose a time range for.
+    ///
+    /// `clip` carries the part of the video to show and whether it starts again
+    /// at the end. `None` plays the whole file, which is what a picture and a
+    /// piece of music always do — only video gets a range.
+    pub fn media_clipped(
+        title: impl Into<String>,
+        path: impl Into<String>,
+        kind: Option<String>,
+        heading: Option<String>,
+        clip: Option<MediaClip>,
+    ) -> Self {
         let title = title.into();
+        // A clip that starts at the beginning and runs to the end still only
+        // travels if a repeat choice came with it; an empty range is left out
+        // so the payload stays as small as it was before ranges existed.
+        let clip = clip.map(MediaClip::sanitized);
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             content_type: match kind.as_deref() {
@@ -208,6 +297,9 @@ impl PresentationItem {
                 path: path.into(),
                 media_kind: kind,
                 heading: non_empty(&heading),
+                start_ms: clip.and_then(|c| (c.start_ms > 0).then_some(c.start_ms)),
+                end_ms: clip.and_then(|c| c.end_ms),
+                repeat: clip.map(|c| c.repeat),
             },
         }
     }
@@ -471,6 +563,106 @@ mod tests {
         assert!(matches!(
             captioned.payload,
             ContentPayload::Media { ref heading, .. } if heading.as_deref() == Some("Baptism")
+        ));
+    }
+
+    #[test]
+    fn a_chosen_time_range_travels_with_the_video() {
+        // The operator picked 6s → 30s and asked for it to repeat. The range
+        // must reach the projector inside the item, because the projector
+        // window cannot read the media library.
+        let item = PresentationItem::media_clipped(
+            "worship.mp4",
+            "/tmp/worship.mp4",
+            Some("video".to_string()),
+            None,
+            Some(MediaClip {
+                start_ms: 6_000,
+                end_ms: Some(30_000),
+                repeat: true,
+            }),
+        );
+        assert!(matches!(
+            item.payload,
+            ContentPayload::Media {
+                start_ms: Some(6_000),
+                end_ms: Some(30_000),
+                repeat: Some(true),
+                ..
+            }
+        ));
+
+        // "From 6s to the end" is a range too: only the start travels.
+        let open_ended = PresentationItem::media_clipped(
+            "notice.mp4",
+            "/tmp/notice.mp4",
+            Some("video".to_string()),
+            None,
+            Some(MediaClip {
+                start_ms: 6_000,
+                end_ms: None,
+                repeat: false,
+            }),
+        );
+        assert!(matches!(
+            open_ended.payload,
+            ContentPayload::Media {
+                start_ms: Some(6_000),
+                end_ms: None,
+                repeat: Some(false),
+                ..
+            }
+        ));
+
+        // A whole-file clip carries no range at all, only the stop/repeat
+        // choice, so the payload stays as small as it was before ranges.
+        let plain = PresentationItem::media_clipped(
+            "whole.mp4",
+            "/tmp/whole.mp4",
+            Some("video".to_string()),
+            None,
+            Some(MediaClip::default()),
+        );
+        assert!(matches!(
+            plain.payload,
+            ContentPayload::Media {
+                start_ms: None,
+                end_ms: None,
+                repeat: Some(false),
+                ..
+            }
+        ));
+
+        // A picture and a piece of music never carry a repeat choice.
+        let picture = PresentationItem::media(
+            "baptism.jpg",
+            "/tmp/baptism.jpg",
+            Some("image".to_string()),
+            None,
+        );
+        assert!(matches!(
+            picture.payload,
+            ContentPayload::Media { repeat: None, .. }
+        ));
+    }
+
+    #[test]
+    fn a_video_saved_before_time_ranges_existed_still_loads() {
+        // Saved items keep their payload as JSON, so a video stored by an
+        // earlier build has no start/end/repeat fields at all.
+        let row = record(
+            "video",
+            r#"{"kind":"media","path":"/tmp/clip.mp4","mediaKind":"video"}"#,
+        );
+        let item = row.to_item().expect("should convert");
+        assert!(matches!(
+            item.payload,
+            ContentPayload::Media {
+                start_ms: None,
+                end_ms: None,
+                repeat: None,
+                ..
+            }
         ));
     }
 

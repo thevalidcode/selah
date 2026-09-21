@@ -74,6 +74,7 @@ pub fn all_handlers() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send 
         media::browse_directory,
         media::load_media_directory,
         media::project_media,
+        media::set_media_clip,
         media::get_media_playback_state,
         media::control_media_playback,
         media::report_media_playback,

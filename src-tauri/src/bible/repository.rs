@@ -542,6 +542,47 @@ impl<'a> MediaRepository<'a> {
             .map_err(Into::into)
     }
 
+    /// Looks up a registered file by its id.
+    ///
+    /// Used when the Media screen remembers something about a file — a chosen
+    /// time range, for instance — because the interface knows the id it listed,
+    /// not the path.
+    pub fn find_by_id(&self, id: &str) -> Result<Option<MediaItem>, AppError> {
+        self.conn
+            .query_row(
+                "SELECT id, type, name, path, metadata, created_at FROM media WHERE id = ?1",
+                [id],
+                |row| {
+                    let metadata: Option<String> = row.get(4)?;
+                    Ok(MediaItem {
+                        id: row.get(0)?,
+                        kind: row.get(1)?,
+                        name: row.get(2)?,
+                        path: row.get(3)?,
+                        metadata: metadata.map(|m| {
+                            serde_json::from_str(&m).unwrap_or_else(|_| serde_json::json!({}))
+                        }),
+                        created_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// Replaces a file's metadata blob.
+    ///
+    /// The blob is the record's free-form half (`size`, `kind`, and anything the
+    /// operator chose about the file), so replacing it whole is what lets a
+    /// caller merge in one new fact without a schema change.
+    pub fn update_metadata(&self, id: &str, metadata: &serde_json::Value) -> Result<(), AppError> {
+        self.conn.execute(
+            "UPDATE media SET metadata = ?1 WHERE id = ?2",
+            params![metadata.to_string(), id],
+        )?;
+        Ok(())
+    }
+
     pub fn insert(&self, item: &MediaItem) -> Result<(), AppError> {
         let metadata = item
             .metadata

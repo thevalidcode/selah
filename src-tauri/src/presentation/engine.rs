@@ -45,7 +45,10 @@ impl PresentationEngine {
                 .map_err(|_| AppError::Internal("presentation state lock poisoned".to_string()))?;
             state.set_current(item.clone());
         }
-        display.ensure_open(app, true)?;
+        // The window is opened by the caller (`AppState::project`) with the
+        // operator's saved fullscreen choice. Opening it here as well would
+        // override that choice, because this layer knows nothing about settings.
+        let _ = display;
         self.emit_changed(app, display)
     }
 

@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::errors::{AppError, CommandResult};
 use crate::media::{DirectoryListing, MediaItem, MediaLibrary, MediaScan};
-use crate::models::presentation::{PresentationItem, PresentationState};
+use crate::models::presentation::{MediaClip, PresentationItem, PresentationState};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -35,6 +35,46 @@ pub struct ProjectMediaRequest {
     /// Heading shown with the file; falls back to the file name.
     #[serde(default)]
     pub title: Option<String>,
+    /// The part of the video to show, and whether it starts again at the end.
+    /// Omitted when the operator simply pressed Show on a file with no range.
+    #[serde(default)]
+    pub clip: Option<MediaClipRequest>,
+}
+
+/// A time range chosen on the Media screen.
+///
+/// Milliseconds, because that is what a `<video>` element reports and what the
+/// sliders in the preview actually produce; converting to seconds would lose
+/// the frame the operator was looking at.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaClipRequest {
+    /// Where playback begins. Absent means the beginning of the file.
+    #[serde(default)]
+    pub start_ms: u64,
+    /// Where playback ends. Absent runs to the end of the file.
+    #[serde(default)]
+    pub end_ms: Option<u64>,
+    /// Whether it starts again instead of stopping. Absent follows the saved
+    /// Screen setting, which is what a plain Show on a video does.
+    #[serde(default)]
+    pub repeat: Option<bool>,
+}
+
+impl MediaClipRequest {
+    /// The clip as the presentation engine wants it.
+    ///
+    /// `repeat_default` is used when the request did not carry a choice, so the
+    /// "stop or repeat" behaviour is the same whether the operator opened the
+    /// preview or just pressed Show.
+    fn into_clip(self, repeat_default: bool) -> MediaClip {
+        MediaClip {
+            start_ms: self.start_ms,
+            end_ms: self.end_ms,
+            repeat: self.repeat.unwrap_or(repeat_default),
+        }
+        .sanitized()
+    }
 }
 
 #[tauri::command]
@@ -151,9 +191,59 @@ pub fn project_media(
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty());
 
-    let item = PresentationItem::media(title, request.path, Some(kind.to_string()), caption);
+    // Video is the one kind that can be a chosen part rather than a whole file.
+    // The saved Screen setting fills in the "stop or repeat" answer when the
+    // caller did not make a choice, so Show on a video behaves the same as the
+    // preview did.
+    let clip = request
+        .clip
+        .map(|clip| clip.into_clip(repeat_videos_default(&state)));
+
+    let item =
+        PresentationItem::media_clipped(title, request.path, Some(kind.to_string()), caption, clip);
     state.project(item, &app)?;
     Ok(state.presentation.state())
+}
+
+/// Whether video repeats by default, from the saved Screen settings.
+///
+/// On unless the operator turned it off, so a settings document that predates
+/// the choice — or a locked settings mutex — cannot make video behave worse
+/// than it used to.
+fn repeat_videos_default(state: &State<'_, AppState>) -> bool {
+    state
+        .settings
+        .lock()
+        .map(|settings| settings.presentation.repeat_videos)
+        .unwrap_or_else(|_| crate::models::settings::default_repeat_videos())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetMediaClipRequest {
+    /// The library record the range belongs to.
+    pub id: String,
+    /// The range and repeat choice. Omit it (or send `null`) to forget the
+    /// range and go back to playing the file whole.
+    #[serde(default)]
+    pub clip: Option<MediaClipRequest>,
+}
+
+/// Remembers which part of a video to show, for next time.
+///
+/// The choice lives in the media record's metadata, so reopening Selah — or
+/// pressing Show on the file later — brings the same range back without the
+/// operator setting it up again.
+#[tauri::command]
+pub fn set_media_clip(
+    request: SetMediaClipRequest,
+    state: State<'_, AppState>,
+) -> CommandResult<MediaItem> {
+    // The preview always sends its switch, so the fallback only matters for a
+    // hand-made call: the saved setting is the sensible answer.
+    let repeat_default = repeat_videos_default(&state);
+    let clip = request.clip.map(|clip| clip.into_clip(repeat_default));
+    state.with_conn(|conn| MediaLibrary::set_clip(conn, &request.id, clip))
 }
 
 // ---------------------------------------------------------

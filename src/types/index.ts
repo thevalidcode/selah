@@ -256,6 +256,16 @@ export type ContentPayload =
       mediaKind?: MediaKind;
       /** Optional caption drawn over the media. */
       heading?: string;
+      /** Where playback begins, in milliseconds. Absent means the beginning. */
+      startMs?: number;
+      /** Where playback ends, in milliseconds. Absent runs to the end. */
+      endMs?: number;
+      /**
+       * Whether a video starts again at the end (or at the end of the chosen
+       * range) instead of stopping. Absent for pictures and sound; the projector
+       * then follows the saved Screen setting.
+       */
+      repeat?: boolean;
     }
   | {
       kind: "song";
@@ -340,7 +350,41 @@ export interface MediaScan {
   added: number;
   /** Media files now known inside the folder. */
   total: number;
+  /**
+   * Folders inside the chosen folder that could not be read. Reported so files
+   * never appear to be missing without explanation.
+   */
+  skipped: number;
+  /**
+   * True when Selah stopped before the end of the folder — the file limit was
+   * reached, or the folder tree was deeper than Selah walks.
+   */
+  truncated: boolean;
   items: MediaItem[];
+}
+
+/**
+ * How a video should be played: where to begin, where to stop, and whether it
+ * starts again instead of stopping.
+ *
+ * A clip with no range (`startMs: 0`, no `endMs`) is still meaningful: it is the
+ * "stop or repeat" choice for the whole file, which is what the Screen setting
+ * holds by default.
+ */
+export interface MediaClip {
+  /** Where playback begins, in milliseconds from the start of the file. */
+  startMs: number;
+  /** Where playback ends, in milliseconds. Absent runs to the end. */
+  endMs?: number;
+  /** Whether playback starts again at `startMs` instead of stopping. */
+  repeat: boolean;
+}
+
+/** The clip as sent to the backend; `repeat` may be left to the saved setting. */
+export interface MediaClipRequest {
+  startMs?: number;
+  endMs?: number;
+  repeat?: boolean;
 }
 
 // -------------------------------------------------------------------- songs
@@ -431,6 +475,12 @@ export interface AppSettings {
     followLive: boolean;
     /** The operator's own logo and line of text, drawn on every item. */
     branding: BrandingSettings;
+    /**
+     * Whether a video starts again when it reaches the end (or the end of the
+     * time range chosen for it on the Media screen). The per-file choice there
+     * starts from this.
+     */
+    repeatVideos: boolean;
   };
   /** Where the media library reads files from (chosen at runtime). */
   media: {
@@ -484,6 +534,11 @@ export interface PresentationSettingsEvent {
   followLive: boolean;
   /** The operator's logo and line of text, drawn on every projected item. */
   branding: BrandingSettings;
+  /**
+   * Whether a video starts again when it reaches the end. Carried to the
+   * projector so a Save changes a video already on the screen.
+   */
+  repeatVideos: boolean;
 }
 
 /** Serialized error payload returned by failing commands. */

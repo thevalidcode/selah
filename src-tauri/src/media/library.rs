@@ -14,6 +14,7 @@ use serde_json::Value;
 
 use crate::bible::repository::MediaRepository;
 use crate::errors::AppError;
+use crate::models::presentation::MediaClip;
 use rusqlite::Connection;
 
 const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp"];
@@ -119,7 +120,26 @@ pub struct MediaScan {
     pub added: usize,
     /// Media files now known inside the folder (added + already registered).
     pub total: usize,
+    /// Folders inside the chosen folder that could not be read.
+    ///
+    /// A locked folder, or one on a drive that was unplugged mid-scan, must not
+    /// stop the rest of the library from loading — but the operator has to be
+    /// told, otherwise files appear to be missing with no explanation.
+    pub skipped: usize,
+    /// True when Selah stopped before the end of the folder: either the file
+    /// limit was reached or the folder tree was deeper than Selah walks.
+    pub truncated: bool,
     pub items: Vec<MediaItem>,
+}
+
+/// What one walk of a folder tree found.
+#[derive(Debug, Default)]
+struct ScanWalk {
+    files: Vec<PathBuf>,
+    /// Folders that could not be read (permissions, a vanished folder).
+    skipped: usize,
+    /// True when the walk stopped early because of a limit.
+    truncated: bool,
 }
 
 pub struct MediaLibrary;
@@ -171,16 +191,26 @@ impl MediaLibrary {
             )));
         }
 
+        // The folder the operator chose must itself be readable: a failure here
+        // is a mistake they need to see. Folders *inside* it are a different
+        // matter (see `collect_files`).
+        if let Err(e) = std::fs::read_dir(directory) {
+            return Err(AppError::Media(format!(
+                "cannot read {}: {e}",
+                directory.display()
+            )));
+        }
+
         let repo = MediaRepository::new(conn);
         let mut known: Vec<MediaItem> = repo.list()?;
         let mut known_paths: HashSet<String> = known.iter().map(|item| item.path.clone()).collect();
 
-        let mut files = Vec::new();
-        collect_files(directory, recursive, 0, &mut files)?;
-        files.sort();
+        let mut walk = ScanWalk::default();
+        collect_files(directory, recursive, 0, &mut walk);
+        walk.files.sort();
 
         let mut added = 0usize;
-        for file in files.into_iter().take(MAX_SCAN_FILES) {
+        for file in walk.files {
             let path = file.to_string_lossy().to_string();
             if known_paths.contains(&path) {
                 continue;
@@ -192,7 +222,9 @@ impl MediaLibrary {
             added += 1;
         }
 
-        // Report only what lives inside the folder that was just loaded.
+        // Report only what lives inside the folder that was just loaded. The
+        // path is compared by component, so `/media2` is never treated as being
+        // inside `/media`.
         let mut items: Vec<MediaItem> = known
             .into_iter()
             .filter(|item| Path::new(&item.path).starts_with(directory))
@@ -203,7 +235,49 @@ impl MediaLibrary {
             directory: directory.to_string_lossy().to_string(),
             added,
             total: items.len(),
+            skipped: walk.skipped,
+            truncated: walk.truncated,
             items,
+        })
+    }
+
+    /// Remembers the part of a video the operator wants to show.
+    ///
+    /// The range and the "stop or repeat" choice live in the record's metadata
+    /// (JSON), so nothing is copied and no migration is needed. `None` forgets
+    /// the range, putting the file back to playing whole.
+    pub fn set_clip(
+        conn: &Connection,
+        id: &str,
+        clip: Option<MediaClip>,
+    ) -> Result<MediaItem, AppError> {
+        let repo = MediaRepository::new(conn);
+        let item = repo.find_by_id(id)?.ok_or_else(|| {
+            AppError::Media(format!("no media file with id {id}; read the folder again"))
+        })?;
+
+        // Metadata is free-form, so anything unexpected (or missing) starts from
+        // an empty object rather than being thrown away silently.
+        let mut metadata = match item.metadata.clone() {
+            Some(serde_json::Value::Object(map)) => map,
+            _ => serde_json::Map::new(),
+        };
+
+        match clip.map(MediaClip::sanitized) {
+            Some(clip) => {
+                metadata.insert("clip".to_string(), clip.to_metadata_value());
+            }
+            None => {
+                metadata.remove("clip");
+            }
+        }
+
+        let metadata = serde_json::Value::Object(metadata);
+        repo.update_metadata(id, &metadata)?;
+
+        Ok(MediaItem {
+            metadata: Some(metadata),
+            ..item
         })
     }
 
@@ -266,18 +340,37 @@ impl MediaLibrary {
 }
 
 /// Collects presentable files under `directory`, up to [`MAX_SCAN_DEPTH`].
-fn collect_files(
-    directory: &Path,
-    recursive: bool,
-    depth: usize,
-    out: &mut Vec<PathBuf>,
-) -> Result<(), AppError> {
-    if depth > MAX_SCAN_DEPTH || out.len() >= MAX_SCAN_FILES {
-        return Ok(());
+///
+/// A folder inside the chosen one that cannot be read (permissions, a network
+/// share that dropped, a folder deleted while the scan runs) is **skipped and
+/// counted** rather than failing the whole scan: a church service should never
+/// lose the rest of its library because one folder was locked. The count is
+/// reported back so the operator is told, instead of files simply going
+/// missing.
+fn collect_files(directory: &Path, recursive: bool, depth: usize, out: &mut ScanWalk) {
+    if depth > MAX_SCAN_DEPTH {
+        // Deeper than Selah walks; say so rather than pretending the folder is
+        // empty.
+        out.truncated = true;
+        return;
+    }
+    if out.files.len() >= MAX_SCAN_FILES {
+        out.truncated = true;
+        return;
     }
 
-    let read = std::fs::read_dir(directory)
-        .map_err(|e| AppError::Media(format!("cannot read {}: {e}", directory.display())))?;
+    let read = match std::fs::read_dir(directory) {
+        Ok(read) => read,
+        Err(err) => {
+            tracing::warn!(
+                error = %err,
+                folder = %directory.display(),
+                "a media folder could not be read; skipping it"
+            );
+            out.skipped += 1;
+            return;
+        }
+    };
 
     for entry in read.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
@@ -287,18 +380,20 @@ fn collect_files(
         let path = entry.path();
         if path.is_dir() {
             if recursive {
-                collect_files(&path, recursive, depth + 1, out)?;
+                collect_files(&path, recursive, depth + 1, out);
             }
             continue;
         }
         if kind_for_path(&path).is_some() {
-            out.push(path);
-        }
-        if out.len() >= MAX_SCAN_FILES {
-            break;
+            out.files.push(path);
+            if out.files.len() >= MAX_SCAN_FILES {
+                // Anything after this is not read, so the folder is reported as
+                // partly scanned rather than quietly incomplete.
+                out.truncated = true;
+                break;
+            }
         }
     }
-    Ok(())
 }
 
 /// The user's home directory, without pulling in a platform crate.
@@ -377,6 +472,85 @@ mod tests {
         let reread = MediaLibrary::scan(&conn, &dir, true).unwrap();
         assert_eq!(reread.added, 0);
         assert_eq!(reread.total, 2);
+        // Nothing was skipped and nothing was left unread, so the screen can
+        // say "everything here is loaded" with confidence.
+        assert_eq!(reread.skipped, 0);
+        assert!(!reread.truncated);
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_chosen_time_range_is_remembered_for_a_file() {
+        let dir = scratch_dir();
+        let clip_file = dir.join("worship.mp4");
+        std::fs::write(&clip_file, b"not really an mp4").unwrap();
+
+        let conn = memory_db();
+        let scan = MediaLibrary::scan(&conn, &dir, false).unwrap();
+        let item = scan.items.first().cloned().unwrap();
+
+        // 6s → 30s, repeating: the operator's choice for this file.
+        let clip = MediaClip {
+            start_ms: 6_000,
+            end_ms: Some(30_000),
+            repeat: true,
+        };
+        let updated = MediaLibrary::set_clip(&conn, &item.id, Some(clip)).unwrap();
+        assert_eq!(
+            MediaClip::from_metadata(updated.metadata.as_ref()),
+            Some(clip)
+        );
+
+        // Re-reading the folder must not lose the range: the file is already
+        // registered, so its record (and therefore its metadata) is kept.
+        let again = MediaLibrary::scan(&conn, &dir, false).unwrap();
+        assert_eq!(again.added, 0);
+        assert_eq!(
+            MediaClip::from_metadata(again.items[0].metadata.as_ref()),
+            Some(clip)
+        );
+
+        // Forgetting the range puts the file back to playing whole.
+        let cleared = MediaLibrary::set_clip(&conn, &item.id, None).unwrap();
+        assert_eq!(MediaClip::from_metadata(cleared.metadata.as_ref()), None);
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_range_that_ends_before_it_starts_is_not_kept() {
+        // A slip of the end slider would leave the player stuck on one frame,
+        // so the end is dropped: "from 30s to the end of the file".
+        let repaired = MediaClip {
+            start_ms: 30_000,
+            end_ms: Some(6_000),
+            repeat: false,
+        }
+        .sanitized();
+        assert_eq!(repaired.start_ms, 30_000);
+        assert_eq!(repaired.end_ms, None);
+
+        // A whole-file clip is recognised as such, which is how Selah knows
+        // there is no range to carry.
+        assert!(MediaClip::default().is_whole_file());
+        assert!(!repaired.is_whole_file());
+    }
+
+    #[test]
+    fn a_folder_that_is_not_there_is_reported() {
+        let dir = scratch_dir();
+        std::fs::write(dir.join("slide.png"), b"x").unwrap();
+
+        let conn = memory_db();
+        let scan = MediaLibrary::scan(&conn, &dir, true).unwrap();
+        assert_eq!(scan.skipped, 0);
+        assert!(!scan.truncated);
+
+        // A folder that is not there is a mistake the operator must see, not a
+        // silently empty library.
+        let missing = dir.join("nothing-here");
+        assert!(MediaLibrary::scan(&conn, &missing, false).is_err());
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

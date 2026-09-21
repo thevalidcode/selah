@@ -65,15 +65,16 @@ sequenceDiagram
 
 - **Multi-Monitor Presentation**: Manages separate windows for the operator interface and the congregation display, keeping controls hidden from the audience.
 - **Songs Library**: Songs are stored as ordered sections (verse, chorus, bridge) and presented one section at a time — the same step-by-step flow as Scripture, so a long song never has to be squeezed onto one screen.
-- **Media Folders**: Selah never hardcodes a media path. The operator picks a folder at runtime, Selah reads the pictures, videos and sound files inside it, and only that folder is readable by the projector window.
-- **Projector Look**: Background colour, text size and typeface are set in Settings and applied to the congregation's screen when Save is pressed — an already-open projector window updates immediately.
+- **Media Folders**: Selah never hardcodes a media path. The operator picks a folder at runtime, Selah reads the pictures, videos and sound files inside it — and inside its sub-folders when the switch is on — and only that folder is readable by the projector window. The page lists what that folder holds, says so when a file appeared since last time, and reports any folder it could not read.
+- **Video Time Ranges**: a video can be trimmed without editing the file: **Preview** on a video plays it, sets a start and an end (6s → 30s), and decides whether the chosen part stops there or starts again. The choice can be saved with the file, so **Show** uses it from then on, and Settings → Screen holds the default for every other video.
+- **Projector Look**: Background colour, text size and typeface are set in Settings and applied to the congregation's screen when Save is pressed — an already-open projector window updates immediately. Media always fits the screen whole and is centred, rather than being cropped or zoomed to fill it.
 
 ## Design System
 
 ### Typeface
 
 Selah uses **Creato Display** throughout the operator interface, and lets the
-*projected* text use any of five bundled typefaces — so the words on the wall can
+_projected_ text use any of five bundled typefaces — so the words on the wall can
 be matched to the room without changing the interface.
 
 - Self-hosted from `src/fonts/` and bundled by Vite. Selah never fetches a font
@@ -94,10 +95,10 @@ be matched to the room without changing the interface.
 
 Both colours are sampled directly from the logo artwork:
 
-| Token          | Value     | Role                                     |
-| -------------- | --------- | ---------------------------------------- |
-| Logo gold      | `#C9A24B` | Brand mark, active navigation, buttons   |
-| Logo navy      | `#141B2E` | Interface base, logo tile, icon          |
+| Token     | Value     | Role                                   |
+| --------- | --------- | -------------------------------------- |
+| Logo gold | `#C9A24B` | Brand mark, active navigation, buttons |
+| Logo navy | `#141B2E` | Interface base, logo tile, icon        |
 
 The neutral greys are tinted toward the logo navy, so the interface reads as one
 brand rather than a grey theme with a gold highlight added afterwards.
@@ -172,7 +173,7 @@ cp ~/Downloads/encoder_model_quantized.onnx \
 ```
 
 Then open **Settings → Listening**, set **Can Selah understand words?** to
-*On*, and point **Voice model folder** at that folder.
+_On_, and point **Voice model folder** at that folder.
 
 > **Careful with "int8" files.** A dynamically-quantised `int8` export contains
 > `ConvInteger` nodes, which ONNX Runtime's CPU provider cannot execute (it
@@ -182,7 +183,7 @@ Then open **Settings → Listening**, set **Can Selah understand words?** to
 > `models/moonshine/README.md` explains which is which.
 
 If the model or the runtime is missing, Selah still runs — it just reports
-*"Voice model ready: no"* on the Live screen and returns no words.
+_"Voice model ready: no"_ on the Live screen and returns no words.
 
 ## Usage
 
@@ -198,10 +199,10 @@ Detected scripture will appear in the review panel. Click Display to send the co
 ### A round trip you can demo
 
 1. **Songs** → write a title and two sections (label + words) → **Save** → **Show on screen**. Each section is one screen; **Next** / **Back** step through the song verse by verse. In a hurry? **Paste words** takes one long block — numbered lines, blank lines, one verse per line, or a single paragraph of sentences — shows how it will be cut into verses, then fills the sections for you.
-2. **Media** → **Choose folder…** → walk to the folder with your pictures and videos → **Read this folder** → **Show** on any file. Pictures and video are fitted inside the window rather than cropped, and the background colour fills the space around them; the folder you picked is the only one Selah may read. **On the screen now** tells you whether a video is really playing and gives you **Play**, **Pause**, **Start again** and **Stop** from the operator screen.
+2. **Media** → **Choose folder…** → walk to the folder with your pictures and videos → **Read this folder** → **Show** on any file. Selah opens on the folder you used last time and reads it again, so a file added since — in the folder or in any of its sub-folders (**Include sub-folders**) — is simply there. The list shows that folder's files; **Show every file** widens it to everything Selah has ever read. On a video, **Preview** plays it and lets you choose the part to show: set **Starts at** 0:06 and **Stops at** 0:30, decide whether it **starts again at the end**, press **Play the chosen part** to check it and **Save the range** to keep it — or **Show on screen** straight away. Pictures and video are fitted inside the window rather than cropped, centred in the background colour that fills the space around them; the folder you picked is the only one Selah may read. **On the screen now** tells you whether a video is really playing, which seconds of it are showing, and gives you **Play**, **Pause**, **Start again** and **Stop** from the operator screen.
 3. **Settings → Screen** → change the background colour, drag the text size, pick a typeface (each option is drawn in its own font) → add your **logo and name**, choose which edge it hugs and how big it is → the "What the branding looks like" panel shows the actual image and the name in the chosen typeface at the chosen size, and **Save settings** makes it real on an already-open projector window.
 4. **Bible → Look up a verse** → the screen opens on chapter 1, verse 3. Change the **heading size** and **verse size** for this passage only and a warning appears if it will not fit the chosen screen. Search words across **every** installed Bible; if the words are not there you get the closest matches, or passages about the same subject to try instead.
-5. **Bible → Add a Translation** → the published Bibles are listed (NKJV, NIV, ESV, NASB, MSG, AMP, NLT, CSB, HCSB, NET, RSV, NRSV, GNT, CEV, TLB and more): press **Add** on one and it is created, ready for verses. Then store the words — switch on **Enter one verse** and type only the message (`Jesus wept.`; Selah refuses anything with the reference still attached), or switch on **Paste a whole chapter**, press **Copy the prompt** (it names the chapter *and* the translation), give it to an AI chat and paste the array back: every verse is checked before anything is saved. Anything you added can be renamed or removed on the same screen; the three Bibles Selah ships (WEB, KJV, ASV) are marked as its own and cannot be changed.
+5. **Bible → Add a Translation** → the published Bibles are listed (NKJV, NIV, ESV, NASB, MSG, AMP, NLT, CSB, HCSB, NET, RSV, NRSV, GNT, CEV, TLB and more): press **Add** on one and it is created, ready for verses. Then store the words — switch on **Enter one verse** and type only the message (`Jesus wept.`; Selah refuses anything with the reference still attached), or switch on **Paste a whole chapter**, press **Copy the prompt** (it names the chapter _and_ the translation), give it to an AI chat and paste the array back: every verse is checked before anything is saved. Anything you added can be renamed or removed on the same screen; the three Bibles Selah ships (WEB, KJV, ASV) are marked as its own and cannot be changed.
 6. **Presentations** → add an item of kind **Notice** and one of kind **Bible verse** → **Show on screen**: a notice is drawn as a card with a gold accent bar and its own colour, so the congregation can tell an announcement from Scripture at a glance. Use **Edit** on any row to change its words without moving it in the list.
 
 ## Technologies Used
@@ -892,7 +893,6 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
 - 400: the translation is one of Selah's own
 - 500: translation not found, or a database error
 
-
 **Description**: Stores verses the operator supplied under the translation they chose, which then behaves like any other Bible. Every reference is checked against the canonical book registry before anything is written: the book must exist, the chapter must exist in that book, all verses must belong to one book and one chapter, and verse numbers must be unique with real words in them. Writing into one of the three bundled Bibles is refused — add a translation of your own for verses you supply.
 
 **Request**:
@@ -904,7 +904,12 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
     "name": null,
     "abbreviation": null,
     "verses": [
-      { "book": "John", "chapter": 3, "verse": 16, "text": "This is how much God loved the world" }
+      {
+        "book": "John",
+        "chapter": 3,
+        "verse": 16,
+        "text": "This is how much God loved the world"
+      }
     ]
   }
 }
@@ -1488,7 +1493,7 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
 
 #### [IPC] list_media
 
-**Description**: Lists the metadata of every media file Selah has read. Files themselves are never copied — SQLite stores metadata only.
+**Description**: Lists the metadata of every media file Selah has read. Files themselves are never copied — SQLite stores metadata only. `metadata` is a free-form record: the file's size and kind, plus anything the operator chose about it — a video's `clip` (`startMs`, `endMs`, `repeat`) written by `set_media_clip`, which the Media screen reads so a trimmed video keeps its range.
 
 **Request**:
 
@@ -1504,9 +1509,14 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
   "data": [
     {
       "id": "media_1",
-      "kind": "image",
-      "name": "sermon-slide.png",
-      "path": "/Users/operator/Pictures/sermon-slide.png",
+      "kind": "video",
+      "name": "worship.mp4",
+      "path": "/Users/operator/Pictures/worship.mp4",
+      "metadata": {
+        "size": 5242880,
+        "kind": "video",
+        "clip": { "startMs": 6000, "endMs": 30000, "repeat": true }
+      },
       "createdAt": "2023-10-01T12:00:00Z"
     }
   ]
@@ -1560,7 +1570,7 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
 
 #### [IPC] load_media_directory
 
-**Description**: Reads a folder and registers the pictures, videos and sound files inside it. The folder is remembered in settings and opened to the projector window, so only the folder the operator chose is readable.
+**Description**: Reads a folder and registers the pictures, videos and sound files inside it — and, when `recursive` is set, the files in its sub-folders too. The folder is remembered in settings (the Media screen opens on it and reads it again next time) and opened to the projector window, so only the folder the operator chose is readable. `items` is what that folder now holds, which is what the Media screen lists; `skipped` and `truncated` are what the scan could not finish, so the interface can say so instead of leaving files apparently missing.
 
 **Request**:
 
@@ -1582,6 +1592,8 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
     "directory": "/Users/operator/Pictures",
     "added": 12,
     "total": 12,
+    "skipped": 0,
+    "truncated": false,
     "items": []
   }
 }
@@ -1594,15 +1606,20 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
 
 #### [IPC] project_media
 
-**Description**: Puts a media file on the congregation's screen. The presentation window loads the file through Tauri's `asset:` protocol, because a webview cannot read a plain filesystem path.
+**Description**: Puts a media file on the congregation's screen. The presentation window loads the file through Tauri's `asset:` protocol, because a webview cannot read a plain filesystem path. `clip` is optional and describes the part of a **video** to show: `startMs` is where playback begins, `endMs` where it stops (`null` runs to the end), and `repeat` whether it starts again at the end instead of stopping there. Leaving `clip` out plays the file whole and lets the saved Screen setting answer the repeat question; a picture and a piece of music never carry one.
 
 **Request**:
 
 ```json
 {
   "request": {
-    "path": "/Users/operator/Pictures/baptism.jpg",
-    "title": "Baptism"
+    "path": "/Users/operator/Pictures/worship.mp4",
+    "title": null,
+    "clip": {
+      "startMs": 6000,
+      "endMs": 30000,
+      "repeat": true
+    }
   }
 }
 ```
@@ -1615,13 +1632,15 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
   "data": {
     "current": {
       "id": "8f1c…",
-      "contentType": "image",
-      "title": "Baptism",
+      "contentType": "video",
+      "title": "worship.mp4",
       "payload": {
         "kind": "media",
-        "path": "/Users/operator/Pictures/baptism.jpg",
-        "mediaKind": "image",
-        "heading": "Baptism"
+        "path": "/Users/operator/Pictures/worship.mp4",
+        "mediaKind": "video",
+        "startMs": 6000,
+        "endMs": 30000,
+        "repeat": true
       }
     },
     "queue": [],
@@ -1634,6 +1653,50 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
 
 - 400: The file does not exist, or Selah cannot present that file type
 - 500: Presentation window could not be opened
+
+#### [IPC] set_media_clip
+
+**Description**: Remembers which part of a video to show, for next time. The range and the repeat choice are kept with the file in the library (in the media record's metadata, so nothing is copied and no migration is needed), which is what makes **Show** behave the same way on a later Sunday without setting it up again. Sending `clip: null` forgets the range and plays the file whole. The ranges are clamped: an end that is not after the start is treated as "run to the end".
+
+**Request**:
+
+```json
+{
+  "request": {
+    "id": "media_2",
+    "clip": {
+      "startMs": 6000,
+      "endMs": 30000,
+      "repeat": true
+    }
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "media_2",
+    "kind": "video",
+    "name": "worship.mp4",
+    "path": "/Users/operator/Pictures/worship.mp4",
+    "metadata": {
+      "size": 5242880,
+      "kind": "video",
+      "clip": { "startMs": 6000, "endMs": 30000, "repeat": true }
+    },
+    "createdAt": "2026-09-21T09:00:00+00:00"
+  }
+}
+```
+
+**Errors**:
+
+- 400: No media file with that id
+- 500: Database error saving the range
 
 #### [IPC] get_media_playback_state
 
@@ -1700,7 +1763,6 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
 **Response**: the stored snapshot, identical to `get_media_playback_state`.
 
 **Errors**: none — a report from a stale item is dropped rather than refused.
-
 
 **Description**: Registers a single local file (used for one-off files that live outside the chosen media folder).
 
@@ -1977,7 +2039,8 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
       "background": "#000000",
       "fontSize": 64,
       "fontFamily": "Creato Display",
-      "followLive": true
+      "followLive": true,
+      "repeatVideos": true
     },
     "media": {
       "directory": null,
@@ -2019,7 +2082,8 @@ When nothing matches, `suggestions` carries references (never text — Selah shi
         "background": "#000000",
         "fontSize": 64,
         "fontFamily": "Creato Display",
-        "followLive": true
+        "followLive": true,
+        "repeatVideos": true
       },
       "media": {
         "directory": null,

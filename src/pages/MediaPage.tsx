@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   FileImage,
@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import VideoClipDialog from "@/components/media/VideoClipDialog";
 import PageHeader, { EmptyHint, Panel } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,12 +31,14 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { useSettings } from "@/hooks/useSettings";
 import { mediaApi, presentationApi } from "@/lib/api";
 import { friendlyContentType } from "@/lib/content";
 import { EVENTS, useTauriEvent } from "@/lib/events";
-import { mediaUrl } from "@/lib/media";
+import { clipFromMetadata, describeClip, mediaUrl } from "@/lib/media";
 import type {
   DirectoryListing,
+  MediaClip,
   MediaItem,
   MediaPlaybackState,
   PresentationItem,
@@ -46,8 +49,12 @@ import type {
  *
  * Selah stores only metadata in SQLite; the files stay on disk. Nothing is
  * hardcoded: the operator picks a folder at runtime and Selah reads the
- * pictures, videos and sound files inside it. That folder is also what the
- * projector window is allowed to read.
+ * pictures, videos and sound files inside it — sub-folders too, when the switch
+ * is on. That folder is also what the projector window is allowed to read.
+ *
+ * The list below shows what is *in that folder*, which is the question the page
+ * is answering ("what can I put up tonight?"); the whole library is one switch
+ * away for anyone who wants to see everything Selah has ever read.
  */
 export default function MediaPage() {
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -57,6 +64,15 @@ export default function MediaPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // What the last read of the folder found. `null` means "no folder read in
+  // this session", which is when the library list is the only thing to show.
+  const [folderFiles, setFolderFiles] = useState<MediaItem[] | null>(null);
+  const [showEveryFile, setShowEveryFile] = useState(false);
+  // The video open in the preview / trim dialog, if any.
+  const [trimming, setTrimming] = useState<MediaItem | null>(null);
+
+  const { settings } = useSettings();
 
   // What is on the congregation's screen, and (for a video or a piece of
   // music) whether it is playing. Only the projector window knows that for
@@ -135,18 +151,42 @@ export default function MediaPage() {
 
   useEffect(reload, [reload]);
 
-  /** Loads a folder: grants access, registers what is inside, remembers it. */
+  /**
+   * Loads a folder: grants access, registers what is inside, remembers it.
+   *
+   * The files the scan reports are kept as the folder's own list, so the page
+   * shows exactly what the folder holds — including everything in its
+   * sub-folders when the switch is on — rather than every file Selah has ever
+   * read.
+   */
   const loadFolder = useCallback(
     async (path: string, includeSubFolders: boolean) => {
       setBusy(true);
       try {
         const scan = await mediaApi.loadMediaDirectory(path, includeSubFolders);
         setDirectory(scan.directory);
+        setFolderFiles(scan.items);
         reload();
+
+        // Anything the scan could not read is said out loud: files that are
+        // simply missing from a list are the hardest thing to explain.
+        const notes: string[] = [];
+        if (scan.added > 0) {
+          notes.push(`${scan.added} added`);
+        }
+        if (scan.skipped > 0) {
+          notes.push(
+            `${scan.skipped} folder${scan.skipped === 1 ? "" : "s"} could not be read`,
+          );
+        }
+        if (scan.truncated) {
+          notes.push("Selah stopped early — there is more here than one pass");
+        }
+
         setError(null);
         setNotice(
           `${scan.total} file${scan.total === 1 ? "" : "s"} ready${
-            scan.added > 0 ? ` — ${scan.added} added` : ""
+            notes.length > 0 ? ` — ${notes.join(", ")}` : ""
           }.`,
         );
       } catch (e: unknown) {
@@ -158,6 +198,25 @@ export default function MediaPage() {
     },
     [reload],
   );
+
+  // The folder the operator chose last time is remembered in settings, so the
+  // page opens where they left it. Reading it again straight away is what makes
+  // files added since — in the folder or in any of its sub-folders — appear
+  // without having to pick the folder all over again.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !settings) {
+      return;
+    }
+    restored.current = true;
+
+    const remembered = settings.media.directory;
+    setRecursive(settings.media.recursive);
+    if (remembered) {
+      setDirectory(remembered);
+      void loadFolder(remembered, settings.media.recursive);
+    }
+  }, [settings, loadFolder]);
 
   async function remove(id: string) {
     setBusy(true);
@@ -172,17 +231,29 @@ export default function MediaPage() {
     }
   }
 
-  async function show(item: MediaItem) {
+  /** Shows a file, using the range saved for it unless one was just chosen. */
+  async function show(item: MediaItem, clip?: MediaClip) {
     setBusy(true);
     try {
+      // A picture or a piece of music has no range: only video is trimmed, and
+      // sound has always played once.
+      const chosen =
+        item.kind === "video" ? (clip ?? clipFromMetadata(item.metadata)) : undefined;
+
       // Only sound gets a caption: pictures and video fill the screen as they
       // are, without the file name printed over the top.
       await mediaApi.projectMedia(
         item.path,
         item.kind === "audio" ? item.name : undefined,
+        chosen,
       );
       setError(null);
-      setNotice(`${item.name} is on the screen.`);
+      const range = clipNote(chosen);
+      setNotice(
+        range
+          ? `${item.name} is on the screen — ${range}.`
+          : `${item.name} is on the screen.`,
+      );
     } catch (e: unknown) {
       setNotice(null);
       setError(e instanceof Error ? e.message : String(e));
@@ -191,12 +262,52 @@ export default function MediaPage() {
     }
   }
 
+  /**
+   * Remembers (or forgets) the part of a video to show.
+   *
+   * The range is kept with the file, so Show uses it from then on — and the
+   * lists are updated in place, so the page never shows a range that is no
+   * longer the truth.
+   */
+  async function saveClip(item: MediaItem, clip: MediaClip | null) {
+    setBusy(true);
+    try {
+      const updated = await mediaApi.setMediaClip(item.id, clip);
+      const withClip = (list: MediaItem[]) =>
+        list.map((entry) => (entry.id === item.id ? updated : entry));
+
+      setItems(withClip);
+      setFolderFiles((current) => (current ? withClip(current) : current));
+      setTrimming((current) => (current?.id === item.id ? updated : current));
+      setError(null);
+      setNotice(
+        clip
+          ? `${item.name} will play ${describeClip(clip) ?? "whole"}.`
+          : `${item.name} plays whole again.`,
+      );
+    } catch (e: unknown) {
+      setNotice(null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // The folder view is the default: it answers "what is in the folder I chose".
+  // The whole library stays one switch away for anyone who wants it.
+  const folderView = !showEveryFile && folderFiles !== null;
+  const visibleItems = folderView ? folderFiles : items;
+
   return (
     <>
       <PageHeader
         title="Media"
         subtitle="Your pictures, videos and sound files stay where they are — Selah only remembers where to find them"
-        actions={<Badge variant="muted">{items.length} files</Badge>}
+        actions={
+          <Badge variant="muted">
+            {visibleItems.length} file{visibleItems.length === 1 ? "" : "s"}
+          </Badge>
+        }
       />
 
       {error ? (
@@ -248,7 +359,8 @@ export default function MediaPage() {
           <div>
             <p className="text-sm font-medium">Include sub-folders</p>
             <p className="text-xs text-muted-foreground">
-              Also read folders inside the one you picked.
+              Also read folders inside the one you picked. Changing this reads
+              the folder again straight away.
             </p>
           </div>
           <Switch
@@ -263,20 +375,45 @@ export default function MediaPage() {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           Pictures, video and sound files all work. Selah never copies them — it
-          reads them from the folder you choose.
+          reads them from the folder you choose, and shows you what it found.
         </p>
       </Panel>
 
-      <Panel title={directory ? "Files in this folder" : "Your files"}>
-        {items.length === 0 ? (
+      <Panel
+        title={folderView ? "Files in this folder" : "Your files"}
+        actions={
+          <div className="flex items-center gap-3">
+            <Badge variant="muted">
+              {visibleItems.length} file{visibleItems.length === 1 ? "" : "s"}
+            </Badge>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Show every file
+              <Switch
+                checked={showEveryFile}
+                onCheckedChange={setShowEveryFile}
+                aria-label="Show every file in the library"
+              />
+            </label>
+          </div>
+        }
+      >
+        {visibleItems.length === 0 ? (
           <EmptyHint>
-            Nothing here yet. Choose a folder above and Selah will read the
-            pictures and videos inside it.
+            {folderView
+              ? "Nothing Selah can present is in this folder yet. Turn on “Include sub-folders” above if your files sit in folders inside it, or choose another folder."
+              : "Nothing here yet. Choose a folder above and Selah will read the pictures, videos and sound files inside it."}
           </EmptyHint>
         ) : (
           <ScrollArea className="max-h-[30rem]">
             <ul className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3">
-              {items.map((item) => (
+              {visibleItems.map((item) => {
+                const clip =
+                  item.kind === "video"
+                    ? clipFromMetadata(item.metadata)
+                    : undefined;
+                const range = clipNote(clip);
+
+                return (
                 <li
                   key={item.id}
                   className="flex flex-col overflow-hidden rounded-lg border border-border/60"
@@ -304,6 +441,11 @@ export default function MediaPage() {
                       <p className="selectable truncate text-xs text-muted-foreground">
                         {item.path}
                       </p>
+                      {range ? (
+                        // Which part of a video will play: worth saying on the
+                        // card, so nobody has to open the file to find out.
+                        <p className="mt-0.5 text-xs text-brand">{range}</p>
+                      ) : null}
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       {onScreenPath === item.path ? (
@@ -330,6 +472,17 @@ export default function MediaPage() {
                         </Badge>
                       )}
                       <div className="flex items-center gap-1">
+                        {item.kind === "video" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => setTrimming(item)}
+                          >
+                            <Play className="size-3.5" />
+                            Preview
+                          </Button>
+                        ) : null}
                         <Button
                           variant="success"
                           size="sm"
@@ -352,7 +505,8 @@ export default function MediaPage() {
                     </div>
                   </div>
                 </li>
-              ))}
+              );
+              })}
             </ul>
           </ScrollArea>
         )}
@@ -365,6 +519,36 @@ export default function MediaPage() {
         onUseFolder={(path) => {
           setPickerOpen(false);
           void loadFolder(path, recursive);
+        }}
+      />
+
+      {/*
+        Previewing and trimming a video. The dialog owns the draft range; the
+        page owns saving it and putting it on the screen, so both go through the
+        same code as the Show button on a card.
+      */}
+      <VideoClipDialog
+        item={trimming}
+        savedClip={
+          trimming ? clipFromMetadata(trimming.metadata) : undefined
+        }
+        repeatByDefault={settings?.presentation.repeatVideos ?? true}
+        open={trimming !== null}
+        busy={busy}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTrimming(null);
+          }
+        }}
+        onSave={(clip) => {
+          if (trimming) {
+            void saveClip(trimming, clip);
+          }
+        }}
+        onShow={(clip) => {
+          if (trimming) {
+            void show(trimming, clip);
+          }
         }}
       />
     </>
@@ -473,7 +657,8 @@ function FolderPicker({
               ))}
               {folders.length === 0 && files.length === 0 && !loading ? (
                 <li className="px-2 py-3 text-sm text-muted-foreground">
-                  This folder is empty. Use “Up” to go back.
+                  This folder is empty. Use “Up” to go back. Folders inside it
+                  are listed above.
                 </li>
               ) : null}
             </ul>
@@ -482,6 +667,9 @@ function FolderPicker({
           <p className="text-xs text-muted-foreground">
             {presentable} picture/video/sound file
             {presentable === 1 ? "" : "s"} directly in this folder.
+            {listing?.entries.some((entry) => entry.isDir)
+              ? " The folders listed above are read as well when “Include sub-folders” is on."
+              : ""}
           </p>
         </div>
 
@@ -525,6 +713,22 @@ function OnScreenNow({
   const isMedia = payload?.kind === "media";
   const kind = isMedia ? (payload.mediaKind ?? "image") : undefined;
   const playing = isMedia && playback.playing;
+
+  /**
+   * The part of a video that is playing, when the operator chose one.
+   *
+   * It is shown here because "6s → 30s" is not something anyone should have to
+   * remember while a service is running.
+   */
+  const clip: MediaClip | undefined =
+    payload?.kind === "media" && kind === "video"
+      ? {
+          startMs: payload.startMs ?? 0,
+          endMs: payload.endMs,
+          repeat: payload.repeat ?? false,
+        }
+      : undefined;
+  const range = clipNote(clip);
 
   /** Where the file has got to, as `0:42 / 2:10`. */
   const progress =
@@ -580,6 +784,11 @@ function OnScreenNow({
                   ? ` · ${payload.path}`
                   : ""}
               </p>
+              {range ? (
+                <p className="text-xs text-brand">
+                  Showing {range} — the rest of the file is skipped.
+                </p>
+              ) : null}
             </div>
             {progress ? (
               <p className="font-mono text-xs text-muted-foreground">
@@ -658,6 +867,20 @@ function formatTime(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+/**
+ * The part of a video that will play, as one short line.
+ *
+ * `describeClip` says nothing about a whole file, which is right for a card —
+ * but a whole file that stops at its end, or repeats, is a real choice and is
+ * worth saying out loud.
+ */
+function clipNote(clip: MediaClip | undefined): string | null {
+  if (!clip) {
+    return null;
+  }
+  return describeClip(clip) ?? (clip.repeat ? "the whole video, repeating" : null);
 }
 
 

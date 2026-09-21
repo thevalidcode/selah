@@ -122,19 +122,22 @@ impl DisplayManager {
             .ok_or_else(|| AppError::DisplayNotFound("no displays available".to_string()))?
             .clone();
 
+        // An opening guess, so the window appears on the chosen screen straight
+        // away instead of flashing on the operator's own screen first. It is
+        // corrected below.
         let scale = display.scale_factor.max(1.0);
-        let position = tauri::PhysicalPosition {
+        let opening_position = tauri::PhysicalPosition {
             x: display.position.0,
             y: display.position.1,
         }
         .to_logical::<f64>(scale);
-        let size = tauri::PhysicalSize {
+        let opening_size = tauri::PhysicalSize {
             width: display.size.0,
             height: display.size.1,
         }
         .to_logical::<f64>(scale);
 
-        tauri::WebviewWindowBuilder::new(
+        let window = tauri::WebviewWindowBuilder::new(
             app,
             PRESENTATION_WINDOW_LABEL,
             tauri::WebviewUrl::App("presentation.html".into()),
@@ -142,11 +145,29 @@ impl DisplayManager {
         .title("Selah Presentation")
         .decorations(false)
         .resizable(false)
-        .position(position.x, position.y)
-        .inner_size(size.width, size.height)
-        .fullscreen(fullscreen)
+        .position(opening_position.x, opening_position.y)
+        .inner_size(opening_size.width, opening_size.height)
         .build()
         .map_err(|e| AppError::Presentation(format!("failed to open presentation window: {e}")))?;
+
+        // Size the window from the monitor it actually landed on, then fill the
+        // screen if asked.
+        //
+        // This is what keeps projected media whole and centred. A projector and
+        // the operator's laptop normally run at different scale factors (a
+        // Retina laptop and a 1080p TV, say). Setting the size *before* the
+        // window exists makes it resolve with whichever scale factor it assumes,
+        // and a window built twice as large as the screen gives the webview a
+        // viewport far bigger than the picture: media is then drawn zoomed in,
+        // cropped and away from the centre. Asking the window itself removes the
+        // guess.
+        self.fit_to_its_monitor(&window, &display)?;
+
+        if fullscreen {
+            window
+                .set_fullscreen(true)
+                .map_err(|e| AppError::Presentation(format!("failed to fill the screen: {e}")))?;
+        }
 
         let _ = self.app.emit(
             events::PRESENTATION_DISPLAY_OPENED,
@@ -157,6 +178,66 @@ impl DisplayManager {
         );
 
         Ok(display)
+    }
+
+    /// Moves and sizes a window to cover the monitor it is on.
+    ///
+    /// The size is read from the window's own monitor and converted with that
+    /// monitor's scale factor, so the webview's viewport matches the visible
+    /// screen no matter how the two screens are configured.
+    fn fit_to_its_monitor(
+        &self,
+        window: &tauri::WebviewWindow,
+        fallback: &DisplayInfo,
+    ) -> Result<(), AppError> {
+        let monitor = window
+            .current_monitor()
+            .ok()
+            .flatten()
+            .or_else(|| window.primary_monitor().ok().flatten());
+
+        let (position, size, scale) = match monitor {
+            Some(monitor) => {
+                let scale = monitor.scale_factor().max(1.0);
+                let physics_position = *monitor.position();
+                let physics_size = *monitor.size();
+                (
+                    physics_position.to_logical::<f64>(scale),
+                    physics_size.to_logical::<f64>(scale),
+                    scale,
+                )
+            }
+            // No monitor reported (a headless session, or a display unplugged
+            // between listing and opening): use the screen the operator chose.
+            None => (
+                tauri::PhysicalPosition {
+                    x: fallback.position.0,
+                    y: fallback.position.1,
+                }
+                .to_logical::<f64>(fallback.scale_factor.max(1.0)),
+                tauri::PhysicalSize {
+                    width: fallback.size.0,
+                    height: fallback.size.1,
+                }
+                .to_logical::<f64>(fallback.scale_factor.max(1.0)),
+                fallback.scale_factor.max(1.0),
+            ),
+        };
+
+        window
+            .set_size(tauri::LogicalSize::new(size.width, size.height))
+            .map_err(|e| AppError::Presentation(format!("failed to size the projector: {e}")))?;
+        window
+            .set_position(tauri::LogicalPosition::new(position.x, position.y))
+            .map_err(|e| AppError::Presentation(format!("failed to place the projector: {e}")))?;
+
+        tracing::info!(
+            screen = size.width,
+            height = size.height,
+            scale,
+            "projector window fitted to its screen"
+        );
+        Ok(())
     }
 
     /// Closes the presentation window if it exists.

@@ -833,6 +833,26 @@ function PresentationSection({
             />
           </div>
 
+          <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+            <div>
+              <p className="text-sm font-medium">
+                Start videos again at the end
+              </p>
+              <p className="text-xs text-muted-foreground">
+                When a video reaches its end — or the end of the time range
+                chosen for it on the Media screen — it plays again. Turn this
+                off and it stops on its last frame. A file can be set the other
+                way from its Preview button on Media.
+              </p>
+            </div>
+            <Switch
+              checked={presentation.repeatVideos}
+              onCheckedChange={(repeatVideos) =>
+                update({ presentation: { repeatVideos } })
+              }
+            />
+          </div>
+
           <div className="space-y-3 rounded-lg border border-border/60 p-3 sm:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>

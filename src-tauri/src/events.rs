@@ -68,6 +68,10 @@ pub struct PresentationSettingsEvent {
     pub follow_live: bool,
     /// The operator's logo and line of text, drawn on every projected item.
     pub branding: crate::models::settings::BrandingSettings,
+    /// Whether a video starts again when it reaches the end. Carried to the
+    /// projector so a Save changes a video that is on the screen right now,
+    /// instead of only the next one.
+    pub repeat_videos: bool,
 }
 
 impl From<&crate::models::settings::PresentationSettings> for PresentationSettingsEvent {
@@ -79,6 +83,7 @@ impl From<&crate::models::settings::PresentationSettings> for PresentationSettin
             fullscreen: settings.fullscreen,
             follow_live: settings.follow_live,
             branding: settings.branding.clone(),
+            repeat_videos: settings.repeat_videos,
         }
     }
 }

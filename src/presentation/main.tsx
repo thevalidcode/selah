@@ -19,11 +19,12 @@ import { SelahIcon } from "@/components/ui/selah-icon";
 import { mediaApi, settingsApi } from "@/lib/api";
 import { EVENTS, subscribeToPresentation } from "@/lib/events";
 import { isLightColor, resolveFontFamily } from "@/lib/fonts";
-import { mediaKindFromPath, mediaUrl } from "@/lib/media";
+import { clipEndAction, mediaKindFromPath, mediaUrl } from "@/lib/media";
 import type {
   AppSettings,
   BrandingSettings,
   ContentPayload,
+  MediaClip,
   MediaPlaybackCommand,
   PresentationItem,
 } from "@/types";
@@ -35,7 +36,7 @@ import "../index.css";
  */
 type ProjectorSettings = Pick<
   AppSettings["presentation"],
-  "background" | "fontSize" | "fontFamily" | "branding"
+  "background" | "fontSize" | "fontFamily" | "branding" | "repeatVideos"
 >;
 
 const FALLBACK_SETTINGS: ProjectorSettings = {
@@ -43,6 +44,7 @@ const FALLBACK_SETTINGS: ProjectorSettings = {
   fontSize: 64,
   fontFamily: "Creato Display",
   branding: { position: "bottom", sizePercent: 30 },
+  repeatVideos: true,
 };
 
 /**
@@ -92,10 +94,17 @@ function PresentationScreen() {
   const [branding, setBranding] = useState<BrandingSettings>(
     FALLBACK_SETTINGS.branding,
   );
+  // The saved answer to "when a video reaches the end: stop or start again".
+  // It is the default for every video, and a per-file choice on the Media
+  // screen overrides it for that file.
+  const [repeatVideos, setRepeatVideos] = useState(
+    FALLBACK_SETTINGS.repeatVideos,
+  );
 
   const applySettings = useCallback((settings: ProjectorSettings) => {
     applyProjectorSettings(settings);
     setBranding(settings.branding ?? FALLBACK_SETTINGS.branding);
+    setRepeatVideos(settings.repeatVideos ?? FALLBACK_SETTINGS.repeatVideos);
   }, []);
 
   useEffect(() => {
@@ -160,7 +169,7 @@ function PresentationScreen() {
 
   return (
     <div className="pres-stage">
-      <ProjectedItem item={item} />
+      <ProjectedItem item={item} repeatVideos={repeatVideos} />
       <BrandingOverlay branding={branding} />
     </div>
   );
@@ -193,13 +202,25 @@ function BrandingOverlay({ branding }: { branding: BrandingSettings }) {
   );
 }
 
-function ProjectedItem({ item }: { item: PresentationItem }) {
+function ProjectedItem({
+  item,
+  repeatVideos,
+}: {
+  item: PresentationItem;
+  /** Saved "stop or repeat" answer, used when the item carries no choice. */
+  repeatVideos: boolean;
+}) {
   const payload = item.payload;
 
   switch (payload.kind) {
     case "media":
       return (
-        <ProjectedMedia payload={payload} title={item.title} itemId={item.id} />
+        <ProjectedMedia
+          payload={payload}
+          title={item.title}
+          itemId={item.id}
+          repeatVideos={repeatVideos}
+        />
       );
     case "song":
       return (
@@ -284,11 +305,15 @@ function ProjectedText({
 /**
  * An image, video or audio file, taking over the whole screen.
  *
- * The file is fitted **inside** the window (`object-contain`, never cropped),
- * and the space it does not fill is painted the projector's own background
- * colour — so a portrait photo on a wide screen never spills past the edges,
- * and nothing is ever cut off. A video plays straight away and loops until the
- * operator moves on; music gets a card instead of a blank screen.
+ * The file is fitted **inside** the window (`object-contain`, never cropped) and
+ * centred in the space it does not fill, which is painted the projector's own
+ * background colour — so a portrait photo on a wide screen never spills past the
+ * edges, and nothing is ever cut off.
+ *
+ * A video can be a *part* of a file: the Media screen lets the operator choose
+ * where it starts and where it stops, and whether it repeats, so a long clip can
+ * be trimmed to the seconds that matter. Music gets a card instead of a blank
+ * screen and plays once.
  *
  * Video and sound also answer the operator's play/pause/restart/stop buttons
  * and report back what they are actually doing: the operator screen cannot see
@@ -298,15 +323,79 @@ function ProjectedMedia({
   payload,
   title,
   itemId,
+  repeatVideos,
 }: {
   payload: Extract<ContentPayload, { kind: "media" }>;
   title: string;
   itemId: string;
+  /** Saved "stop or repeat" answer; a per-file choice in the item wins. */
+  repeatVideos: boolean;
 }) {
   const source = mediaUrl(payload.path);
   const kind = payload.mediaKind ?? mediaKindFromPath(payload.path);
   const heading = payload.heading ?? title;
   const player = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
+
+  // The part of the video to play. A picture and a piece of music never carry a
+  // range, and only video repeats — sound has always played once and stopped.
+  const clip: MediaClip | undefined =
+    kind === "video"
+      ? {
+          startMs: Math.max(0, payload.startMs ?? 0),
+          endMs: payload.endMs,
+          repeat: payload.repeat ?? repeatVideos,
+        }
+      : undefined;
+  const startSeconds = (clip?.startMs ?? 0) / 1000;
+  const endMs = clip?.endMs;
+
+  /**
+   * Puts the player on the first frame of the chosen part.
+   *
+   * A seek made before the file knows its own length is ignored by the player,
+   * which would silently start the video from the very beginning.
+   */
+  function seekToStart(element: HTMLVideoElement | HTMLAudioElement) {
+    if (startSeconds > 0 && Number.isFinite(element.duration)) {
+      element.currentTime = Math.min(startSeconds, element.duration);
+    }
+  }
+
+  /** Where a video should stop, whether the range says so or the file ends. */
+  function rangeEnd(element: HTMLVideoElement | HTMLAudioElement): number | undefined {
+    if (endMs !== undefined) {
+      return endMs;
+    }
+    return Number.isFinite(element.duration) ? element.duration * 1000 : undefined;
+  }
+
+  /**
+   * Holds the player inside the chosen range.
+   *
+   * Run on every `timeupdate`: a range that should repeat goes back to its
+   * start, and one that should stop is paused on its last frame, so the
+   * congregation sees the end of what the operator chose instead of the file
+   * carrying on.
+   */
+  function holdWithinRange(element: HTMLVideoElement | HTMLAudioElement) {
+    if (!clip) {
+      return;
+    }
+    const action = clipEndAction(element.currentTime * 1000, clip, rangeEnd(element) ?? 0);
+    if (action === "restart") {
+      element.currentTime = startSeconds;
+      void element.play().catch(() => undefined);
+      return;
+    }
+    if (action === "end") {
+      element.pause();
+      if (endMs !== undefined) {
+        // Land exactly on the chosen end so the last frame stays visible.
+        element.currentTime = endMs / 1000;
+      }
+      reportElement(element, true);
+    }
+  }
 
   // Commands from the operator screen, and reports back to it.
   useEffect(() => {
@@ -340,19 +429,33 @@ function ProjectedMedia({
       }
 
       switch (event.payload.action) {
-        case "play":
+        case "play": {
+          // Held at the end of the range: playing again starts the range over
+          // rather than instantly finishing again.
+          const end =
+            endMs ??
+            (Number.isFinite(element.duration)
+              ? element.duration * 1000
+              : undefined);
+          if (end !== undefined && element.currentTime * 1000 >= end - 50) {
+            element.currentTime = startSeconds;
+          }
           void element.play().catch(() => undefined);
           break;
+        }
         case "pause":
           element.pause();
           break;
         case "restart":
-          element.currentTime = 0;
+          // "Start again" means the beginning of what is being shown, which is
+          // the chosen start for a trimmed video — not the start of the file the
+          // operator deliberately skipped.
+          element.currentTime = startSeconds;
           void element.play().catch(() => undefined);
           break;
         case "stop":
           element.pause();
-          element.currentTime = 0;
+          element.currentTime = startSeconds;
           break;
       }
       // Report straight away so the button feels connected, then again when the
@@ -371,7 +474,9 @@ function ProjectedMedia({
       disposed = true;
       unlisten?.();
     };
-  }, [itemId, kind]);
+    // `startSeconds`/`endMs` change with the projected item, which is also what
+    // re-subscribes the command listener, so they belong in the deps.
+  }, [itemId, kind, startSeconds, endMs]);
 
   /** Reports on the events the player itself raises. */
   const elementRef = useCallback(
@@ -390,13 +495,31 @@ function ProjectedMedia({
             className="pres-media"
             src={source}
             autoPlay
-            loop
             playsInline
+            /*
+              `loop` is deliberately not used. A repeating video is sent back to
+              the start of the *chosen range*, not to the start of the file, and
+              a video that should stop has to be able to reach its end.
+            */
+            onLoadedMetadata={(event) => {
+              seekToStart(event.currentTarget);
+              reportElement(event.currentTarget);
+            }}
             onPlay={(event) => reportElement(event.currentTarget)}
             onPause={(event) => reportElement(event.currentTarget)}
-            onEnded={(event) => reportElement(event.currentTarget, true)}
-            onLoadedMetadata={(event) => reportElement(event.currentTarget)}
-            onTimeUpdate={(event) => reportElement(event.currentTarget, false, true)}
+            onEnded={(event) => {
+              const element = event.currentTarget;
+              if (clip?.repeat) {
+                element.currentTime = startSeconds;
+                void element.play().catch(() => undefined);
+                return;
+              }
+              reportElement(element, true);
+            }}
+            onTimeUpdate={(event) => {
+              holdWithinRange(event.currentTarget);
+              reportElement(event.currentTarget, false, true);
+            }}
           />
         ) : kind === "audio" ? (
           <div className="pres-audio">

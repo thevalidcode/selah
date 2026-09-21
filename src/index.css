@@ -377,21 +377,28 @@
   }
 
   /*
-   * Media must always fit inside the window: the frame is pinned to the stage
-   * and the file is contained rather than cropped, so nothing overflows and the
-   * background colour fills whatever is left over.
+   * Media must always fit inside the window and sit in the middle of it: the
+   * frame is pinned to the stage and the file is contained rather than cropped,
+   * so nothing overflows and the background colour fills whatever is left over.
+   *
+   * `fixed` (not `absolute`) is deliberate — it cannot be re-anchored by a
+   * positioned ancestor — and flex centring is used rather than grid so the
+   * picture is centred even when it is smaller than the screen in one direction.
    */
   .pres-media__frame {
-    @apply absolute inset-0 grid place-items-center overflow-hidden;
+    @apply fixed inset-0 flex items-center justify-center overflow-hidden;
   }
 
   /*
-   * `max-*` as well as `h-full w-full`: an element that is larger than its
-   * container (a very tall video, or one whose intrinsic size arrives before the
-   * stylesheet) still cannot grow past the screen.
+   * The element is given its own intrinsic size and only ever capped by the
+   * screen, so the file is drawn whole: never stretched to fill the frame, never
+   * zoomed in, and never cropped at the edges. `object-contain` is kept as a
+   * second line of defence for a player that ignores the caps.
    */
   .pres-media {
-    @apply h-full w-full max-h-full max-w-full object-contain;
+    @apply m-auto max-h-full max-w-full object-contain;
+    width: auto;
+    height: auto;
   }
 
   /* --------------------------------------------------------------- branding */
