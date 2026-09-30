@@ -418,7 +418,7 @@
   }
 
   .pres-brand__text {
-    @apply font-medium tracking-[0.22em] uppercase;
+    @apply font-medium tracking-[0.04em] uppercase;
   }
 
   /*

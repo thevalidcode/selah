@@ -72,7 +72,8 @@ function applyProjectorSettings(settings: ProjectorSettings) {
 
   // Branding is sized relative to the projected words, so a church with a big
   // screen and a church with a small one both get a sensible overlay.
-  const percent = branding.sizePercent || FALLBACK_SETTINGS.branding.sizePercent;
+  const percent =
+    branding.sizePercent || FALLBACK_SETTINGS.branding.sizePercent;
   root.style.setProperty(
     "--pres-brand-size",
     `calc(var(--pres-size, 64px) * ${percent / 100})`,
@@ -85,7 +86,6 @@ function applyProjectorSettings(settings: ProjectorSettings) {
   // Paint the webview itself too, so nothing flashes between items.
   document.body.style.background = settings.background;
 }
-
 
 /** Renders the currently projected item, or the idle slate. */
 function PresentationScreen() {
@@ -125,7 +125,9 @@ function PresentationScreen() {
       setConnected(true);
     }).then(track);
 
-    listen(EVENTS.presentationDisplayOpened, () => setConnected(true)).then(track);
+    listen(EVENTS.presentationDisplayOpened, () => setConnected(true)).then(
+      track,
+    );
 
     // How projected content should look. The event covers changes made while
     // Selah is running; the initial read covers a window opened later.
@@ -362,11 +364,15 @@ function ProjectedMedia({
   }
 
   /** Where a video should stop, whether the range says so or the file ends. */
-  function rangeEnd(element: HTMLVideoElement | HTMLAudioElement): number | undefined {
+  function rangeEnd(
+    element: HTMLVideoElement | HTMLAudioElement,
+  ): number | undefined {
     if (endMs !== undefined) {
       return endMs;
     }
-    return Number.isFinite(element.duration) ? element.duration * 1000 : undefined;
+    return Number.isFinite(element.duration)
+      ? element.duration * 1000
+      : undefined;
   }
 
   /**
@@ -381,7 +387,11 @@ function ProjectedMedia({
     if (!clip) {
       return;
     }
-    const action = clipEndAction(element.currentTime * 1000, clip, rangeEnd(element) ?? 0);
+    const action = clipEndAction(
+      element.currentTime * 1000,
+      clip,
+      rangeEnd(element) ?? 0,
+    );
     if (action === "restart") {
       element.currentTime = startSeconds;
       void element.play().catch(() => undefined);
@@ -540,12 +550,6 @@ function ProjectedMedia({
         ) : (
           <img className="pres-media" src={source} alt={heading} />
         )}
-
-        {kind !== "audio" && heading ? (
-          <div className="pres-media__caption">
-            <h1 className="pres-content__heading">{heading}</h1>
-          </div>
-        ) : null}
       </div>
     </div>
   );
@@ -577,7 +581,9 @@ function reportElement(
     .reportMediaPlayback({
       playing: !element.paused && !element.ended,
       positionMs: element.currentTime * 1000,
-      durationMs: Number.isFinite(element.duration) ? element.duration * 1000 : 0,
+      durationMs: Number.isFinite(element.duration)
+        ? element.duration * 1000
+        : 0,
       ended: ended || element.ended,
     })
     .catch(() => undefined);

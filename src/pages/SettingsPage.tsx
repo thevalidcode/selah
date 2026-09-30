@@ -12,7 +12,11 @@ import {
   Upload,
 } from "lucide-react";
 
-import PageHeader, { EmptyHint, KeyValueList, Panel } from "@/components/PageHeader";
+import PageHeader, {
+  EmptyHint,
+  KeyValueList,
+  Panel,
+} from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,16 +30,17 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings, type SettingsPatch } from "@/hooks/useSettings";
 import { FONT_OPTIONS, isLightColor, resolveFontFamily } from "@/lib/fonts";
 import { mediaUrl } from "@/lib/media";
-import { audioApi, bibleApi, mediaApi, presentationApi, speechApi } from "@/lib/api";
+import {
+  audioApi,
+  bibleApi,
+  mediaApi,
+  presentationApi,
+  speechApi,
+} from "@/lib/api";
 import { EVENTS, useTauriEvent } from "@/lib/events";
 import type {
   AppSettings,
@@ -236,7 +241,13 @@ type Update = (patch: SettingsPatch) => void;
 
 // ---------------------------------------------------------------- general
 
-function GeneralSection({ settings, update }: { settings: Settings | null; update: Update }) {
+function GeneralSection({
+  settings,
+  update,
+}: {
+  settings: Settings | null;
+  update: Update;
+}) {
   const [translations, setTranslations] = useState<TranslationStatus[]>([]);
 
   useEffect(() => {
@@ -258,9 +269,7 @@ function GeneralSection({ settings, update }: { settings: Settings | null; updat
           <Input
             id="app-name"
             value={settings.general.appName}
-            onChange={(e) =>
-              update({ general: { appName: e.target.value } })
-            }
+            onChange={(e) => update({ general: { appName: e.target.value } })}
           />
           <p className="text-xs text-muted-foreground">
             A label for this installation. The window title stays “Selah”.
@@ -277,7 +286,10 @@ function GeneralSection({ settings, update }: { settings: Settings | null; updat
                 "light",
                 theme === "light",
               );
-              document.documentElement.classList.toggle("dark", theme !== "light");
+              document.documentElement.classList.toggle(
+                "dark",
+                theme !== "light",
+              );
             }}
           >
             <SelectTrigger id="theme">
@@ -326,7 +338,13 @@ function GeneralSection({ settings, update }: { settings: Settings | null; updat
 
 // ------------------------------------------------------------------- audio
 
-function AudioSection({ settings, update }: { settings: Settings | null; update: Update }) {
+function AudioSection({
+  settings,
+  update,
+}: {
+  settings: Settings | null;
+  update: Update;
+}) {
   const [devices, setDevices] = useState<AudioDeviceInfo[]>([]);
   const [capture, setCapture] = useState<{
     capturing: boolean;
@@ -441,7 +459,13 @@ function AudioSection({ settings, update }: { settings: Settings | null; update:
 
 // ------------------------------------------------------------------ speech
 
-function SpeechSection({ settings, update }: { settings: Settings | null; update: Update }) {
+function SpeechSection({
+  settings,
+  update,
+}: {
+  settings: Settings | null;
+  update: Update;
+}) {
   const [state, setState] = useState<SpeechManagerState | null>(null);
 
   useEffect(() => {
@@ -566,9 +590,7 @@ function SpeechSection({ settings, update }: { settings: Settings | null; update
           </div>
           <Switch
             checked={settings.speech.vadEnabled}
-            onCheckedChange={(vadEnabled) =>
-              update({ speech: { vadEnabled } })
-            }
+            onCheckedChange={(vadEnabled) => update({ speech: { vadEnabled } })}
           />
         </div>
       </div>
@@ -610,7 +632,8 @@ function PresentationSection({
         setLogoChoices(
           files.filter(
             (file) =>
-              file.kind === "image" || /\.(png|jpe?g|gif|webp|svg)$/i.test(file.path),
+              file.kind === "image" ||
+              /\.(png|jpe?g|gif|webp|svg)$/i.test(file.path),
           ),
         ),
       )
@@ -995,7 +1018,9 @@ function PresentationSection({
               be read — a mistyped path shows as a broken image.
             */}
             <div className="space-y-2">
-              <p className="text-sm font-medium">What the branding looks like</p>
+              <p className="text-sm font-medium">
+                What the branding looks like
+              </p>
               <div
                 className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 px-3 py-3"
                 style={{
@@ -1247,8 +1272,8 @@ function MediaSection({
 
         {items.length === 0 ? (
           <EmptyHint>
-            Nothing loaded yet. Open the Media screen, choose a folder, and Selah
-            will read the pictures and videos inside it.
+            Nothing loaded yet. Open the Media screen, choose a folder, and
+            Selah will read the pictures and videos inside it.
           </EmptyHint>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1275,7 +1300,8 @@ function MediaSection({
         )}
         {items.length > 9 ? (
           <p className="text-xs text-muted-foreground">
-            Showing 9 of {items.length} files — the rest are on the Media screen.
+            Showing 9 of {items.length} files — the rest are on the Media
+            screen.
           </p>
         ) : null}
       </div>
@@ -1294,41 +1320,8 @@ function friendlyMediaKind(kind: string): string {
   return "picture";
 }
 
-// ---------------------------------------------------------------- database
-
-/** Full names for the translations people most often have on disk. */
-const KNOWN_TRANSLATIONS: Record<string, string> = {
-  web: "World English Bible",
-  kjv: "King James Version",
-  asv: "American Standard Version",
-};
-
-/**
- * Derives a short id and a readable name from a file path.
- *
- * Saves the operator from typing metadata: `…/kjv.sqlite` becomes
- * `{ id: "kjv", name: "King James Version" }`.
- */
-function describeFile(path: string): { id: string; name: string } {
-  const stem = (path.split(/[\\/]/).pop() ?? "")
-    .replace(/\.(sqlite3?|db|json)$/i, "")
-    .toLowerCase();
-  const id =
-    stem.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "imported";
-  return {
-    id,
-    name:
-      KNOWN_TRANSLATIONS[id] ??
-      stem.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-  };
-}
-
 function DatabaseSection() {
   const [translations, setTranslations] = useState<TranslationStatus[]>([]);
-  const [importPath, setImportPath] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     bibleApi
@@ -1339,90 +1332,12 @@ function DatabaseSection() {
 
   useEffect(reload, [reload]);
 
-  async function runImport() {
-    const path = importPath.trim();
-    if (path.length === 0) {
-      return;
-    }
-    setImporting(true);
-    try {
-      // The file extension decides which reader to use.
-      const isSqlite = /\.(sqlite3?|db)$/i.test(path);
-      const result = isSqlite
-        ? await bibleApi.importSqliteBibleTranslation({
-            path,
-            translationId: describeFile(path).id,
-            name: describeFile(path).name,
-          })
-        : await bibleApi.importBibleTranslation(path);
-
-      setNotice(
-        `Added ${result.versesImported.toLocaleString()} verses as “${result.translationId}”.`,
-      );
-      setImportError(null);
-      setImportPath("");
-      reload();
-    } catch (e: unknown) {
-      setNotice(null);
-      setImportError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setImporting(false);
-    }
-  }
-
   return (
     <Panel title="Bible text">
       <p className="text-sm text-muted-foreground">
         Everything Selah knows is kept in one file on this computer. Nothing is
         uploaded, and nothing is shared with anyone else.
       </p>
-
-      <Separator className="my-4" />
-
-      <h3 className="mb-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        Add Bible text
-      </h3>
-      <p className="mb-3 text-sm text-muted-foreground">
-        Selah already includes three public-domain translations — WEB, KJV and
-        ASV. To add another, point at a file you are allowed to use: either a{" "}
-        <code className="font-mono">.sqlite</code> Bible or a{" "}
-        <code className="font-mono">.json</code> document. Both shapes are
-        described in <code className="font-mono">data/bible/README.md</code>.
-      </p>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1 space-y-1.5">
-          <Label htmlFor="import-path">File on this computer</Label>
-          <Input
-            id="import-path"
-            value={importPath}
-            onChange={(e) => setImportPath(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                void runImport();
-              }
-            }}
-            placeholder="…/Downloads/kjv.sqlite"
-          />
-        </div>
-        <Button
-          variant="success"
-          disabled={importing || importPath.trim().length === 0}
-          onClick={() => void runImport()}
-        >
-          <Upload className="size-4" />
-          Add
-        </Button>
-      </div>
-      {notice ? (
-        <p className="mt-3 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
-          {notice}
-        </p>
-      ) : null}
-      {importError ? (
-        <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {importError}
-        </p>
-      ) : null}
 
       <Separator className="my-4" />
 
@@ -1472,4 +1387,3 @@ function DatabaseSection() {
     </Panel>
   );
 }
-

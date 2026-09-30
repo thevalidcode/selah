@@ -86,7 +86,7 @@ is the export Selah is tested against. With Hugging Face reachable, three
 files are enough:
 
 ```bash
-BASE=https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/main
+BASE=https://huggingface.co/onnx-community/moonshine-tiny-ONNX/tree/main
 DEST="$HOME/Library/Application Support/app.selah.desktop/models/moonshine"
 mkdir -p "$DEST"
 curl -L -o "$DEST/encoder_model_quantized.onnx" "$BASE/onnx/encoder_model_quantized.onnx"
