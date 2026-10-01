@@ -92,12 +92,13 @@ export default function Sidebar() {
     >
       {/* Identity header — the strip every desktop app has at the top. */}
       <div
+        data-tauri-drag-region
         className={cn(
-          "flex h-12 shrink-0 items-center border-b border-sidebar-border",
+          "flex h-12 shrink-0 items-center border-b border-sidebar-border pb-5 pt-10",
           narrow ? "justify-center" : "px-3",
         )}
       >
-        <span className="flex items-center gap-2.5 overflow-hidden">
+        <span data-tauri-drag-region className="flex items-center gap-2.5 overflow-hidden">
           <SelahIcon size={26} tile title="Selah" className="rounded-[7px]" />
           {!narrow ? (
             <span className="text-[0.8125rem] font-black tracking-[0.2em]">
