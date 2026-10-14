@@ -1,22 +1,11 @@
 # =============================================================================
 # Selah Desktop — Production Release Pipeline
 # =============================================================================
+# Builds and publishes Selah for Windows, macOS (ARM + Intel), and Linux.
+# Version source of truth: package.json at the repo root.
 #
-# Builds and publishes Selah for Windows, macOS (Apple Silicon + Intel),
-# and Linux.
-#
-# Triggers:
-#   - Push to main with changes to package.json / Cargo.toml / tauri.conf.json
-#   - Manual workflow dispatch
-#
-# The version in package.json is the single source of truth.
-#
-# Secrets (optional, for code signing):
-#   - TAURI_PRIVATE_KEY
-#   - TAURI_KEY_PASSWORD
-#
+# Optional code-signing secrets: TAURI_PRIVATE_KEY, TAURI_KEY_PASSWORD
 # NOTE: pnpm version is auto-detected from "packageManager" in package.json.
-# Do NOT specify a version in pnpm/action-setup or it will conflict.
 # =============================================================================
 
 name: Release Selah Desktop
@@ -28,10 +17,11 @@ on:
       - "package.json"
       - "src-tauri/Cargo.toml"
       - "src-tauri/tauri.conf.json"
+      - ".github/workflows/build-app.yml"
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g., 1.2.3). Leave empty to use package.json version."
+        description: "Version to release (e.g. 1.2.3). Leave empty to use package.json."
         required: false
         type: string
 
@@ -45,14 +35,14 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Version Check
+  # Version check
   # ---------------------------------------------------------------------------
   check-version:
     name: Check Version
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get-version.outputs.version }}
-      should_release: ${{ steps.check-version.outputs.should_release }}
+      should_release: ${{ steps.check.outputs.should_release }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,386 +59,165 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Detected version: $VERSION"
 
-      - name: Check if version already has a release tag
-        id: check-version
+      - name: Check if tag exists
+        id: check
         run: |
-          VERSION="${{ steps.get-version.outputs.version }}"
-          TAG="v${VERSION}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists — skipping release."
+          if git rev-parse "v${{ steps.get-version.outputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ steps.get-version.outputs.version }} already exists — skipping."
             echo "should_release=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Tag $TAG does not exist — proceeding with release."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
           fi
 
   # ---------------------------------------------------------------------------
-  # Build — macOS (Apple Silicon)
+  # Build (matrix: macOS ARM, macOS Intel, Windows, Linux)
   # ---------------------------------------------------------------------------
-  build-macos-arm:
-    name: Build macOS (Apple Silicon)
+  build:
+    name: Build ${{ matrix.name }}
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: selah-macos-arm64
+          - name: macOS (Intel)
+            os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: selah-macos-x64
+          - name: Windows
+            os: windows-latest
+            target: ""
+            artifact: selah-windows
+          - name: Linux
+            os: ubuntu-22.04
+            target: ""
+            artifact: selah-linux
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: Cache Rust toolchain
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            src-tauri/target/
-          key: ${{ runner.os }}-cargo-arm-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-arm-
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Tauri app (macOS ARM)
-        working-directory: selah
-        env:
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        run: pnpm tauri build --target aarch64-apple-darwin
-
-      - name: Upload macOS ARM artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: selah-macos-arm64
-          path: |
-            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------------------
-  # Build — macOS (Intel)
-  # ---------------------------------------------------------------------------
-  build-macos-x64:
-    name: Build macOS (Intel)
-    needs: check-version
-    if: needs.check-version.outputs.should_release == 'true'
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: Cache Rust toolchain
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            src-tauri/target/
-          key: ${{ runner.os }}-cargo-x64-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-x64-
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-apple-darwin
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Tauri app (macOS Intel)
-        working-directory: selah
-        env:
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        run: pnpm tauri build --target x86_64-apple-darwin
-
-      - name: Upload macOS Intel artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: selah-macos-x64
-          path: |
-            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------------------
-  # Build — Windows
-  # ---------------------------------------------------------------------------
-  build-windows:
-    name: Build Windows
-    needs: check-version
-    if: needs.check-version.outputs.should_release == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: Cache Rust toolchain
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            src-tauri/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Tauri app (Windows)
-        working-directory: selah
-        env:
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        run: pnpm tauri build
-
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: selah-windows
-          path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/*.exe
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------------------
-  # Build — Linux
-  # ---------------------------------------------------------------------------
-  build-linux:
-    name: Build Linux
-    needs: check-version
-    if: needs.check-version.outputs.should_release == 'true'
-    runs-on: ubuntu-22.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: Cache Rust toolchain
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            src-tauri/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
 
       - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libgtk-3-dev \
-            libsoup-3.0-dev \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev libgtk-3-dev libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: pnpm/action-setup@v4
 
-      - name: Build Tauri app (Linux)
-        working-directory: selah
+      - name: Locate pnpm store
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-${{ matrix.target }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app (targeted)
+        if: matrix.target != ''
+        env:
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm tauri build --target ${{ matrix.target }}
+
+      - name: Build Tauri app (default target)
+        if: matrix.target == ''
         env:
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         run: pnpm tauri build
 
-      - name: Upload Linux artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: selah-linux
+          name: ${{ matrix.artifact }}
+          # `**` covers both target-specific dirs (macOS) and the default dir (Win/Linux)
           path: |
-            src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/**/release/bundle/dmg/*.dmg
+            src-tauri/target/**/release/bundle/macos/*.app
+            src-tauri/target/**/release/bundle/msi/*.msi
+            src-tauri/target/**/release/bundle/nsis/*.exe
+            src-tauri/target/**/release/bundle/appimage/*.AppImage
+            src-tauri/target/**/release/bundle/deb/*.deb
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Create GitHub Release
+  # Publish release
   # ---------------------------------------------------------------------------
   create-release:
     name: Create GitHub Release
-    needs:
-      - check-version
-      - build-macos-arm
-      - build-macos-x64
-      - build-windows
-      - build-linux
+    needs: [check-version, build]
     if: |
       always() &&
       needs.check-version.outputs.should_release == 'true' &&
-      needs.build-macos-arm.result == 'success' &&
-      needs.build-macos-x64.result == 'success' &&
-      needs.build-windows.result == 'success' &&
-      needs.build-linux.result == 'success'
+      needs.build.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - name: Get version
-        id: get-version
+        id: v
         run: |
-          VERSION=$(node -e "console.log(require('./package.json').version)")
+          VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: release-artifacts
 
-      - name: List downloaded artifacts
-        run: find release-artifacts -type f | sort
-
-      - name: Verify all expected artifacts exist
+      - name: Verify required artifacts
         run: |
-          ERRORS=0
+          set -e
+          missing=0
+          check() { find release-artifacts -name "$1" | grep -q . || { echo "MISSING: $1"; missing=1; }; }
+          check '*.dmg'
+          check '*.msi'
+          check '*.AppImage'
+          check '*.deb'
+          [ "$missing" -eq 0 ] || exit 1
+          echo "All expected artifacts present."
 
-          if [ -z "$(find release-artifacts/selah-macos-arm64 -name '*.dmg' 2>/dev/null)" ]; then
-            echo "ERROR: Missing macOS ARM DMG"; ERRORS=$((ERRORS + 1))
-          fi
-          if [ -z "$(find release-artifacts/selah-macos-x64 -name '*.dmg' 2>/dev/null)" ]; then
-            echo "ERROR: Missing macOS Intel DMG"; ERRORS=$((ERRORS + 1))
-          fi
-          if [ -z "$(find release-artifacts/selah-windows -name '*.msi' 2>/dev/null)" ]; then
-            echo "ERROR: Missing Windows MSI"; ERRORS=$((ERRORS + 1))
-          fi
-          if [ -z "$(find release-artifacts/selah-linux -name '*.AppImage' 2>/dev/null)" ]; then
-            echo "ERROR: Missing Linux AppImage"; ERRORS=$((ERRORS + 1))
-          fi
-          if [ -z "$(find release-artifacts/selah-linux -name '*.deb' 2>/dev/null)" ]; then
-            echo "ERROR: Missing Linux DEB"; ERRORS=$((ERRORS + 1))
-          fi
-
-          if [ $ERRORS -gt 0 ]; then
-            echo "FAILED: $ERRORS expected artifacts are missing."
-            exit 1
-          fi
-          echo "All expected artifacts are present."
-
-      - name: Create Release
+      - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          VERSION="${{ steps.get-version.outputs.version }}"
+          VERSION="${{ steps.v.outputs.version }}"
           TAG="v${VERSION}"
-          TITLE="Selah Desktop v${VERSION}"
 
           mapfile -d '' assets < <(find release-artifacts -type f \( \
             -name "*${VERSION}*.dmg" -o \
@@ -458,18 +227,10 @@ jobs:
             -name "*${VERSION}*.deb" \
           \) -print0 | sort -z)
 
-          if ((${#assets[@]} == 0)); then
-            echo "ERROR: No versioned distributable assets found for ${VERSION}."
-            exit 1
-          fi
+          [ ${#assets[@]} -gt 0 ] || { echo "No versioned assets for ${VERSION}"; exit 1; }
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "$TITLE"
-          else
-            gh release create "$TAG" \
-              --title "$TITLE" \
-              --generate-notes \
-              --target "$GITHUB_SHA"
-          fi
+          gh release view "$TAG" >/dev/null 2>&1 \
+            && gh release edit "$TAG" --title "Selah Desktop v${VERSION}" \
+            || gh release create "$TAG" --title "Selah Desktop v${VERSION}" --generate-notes --target "$GITHUB_SHA"
 
           gh release upload "$TAG" "${assets[@]}" --clobber
