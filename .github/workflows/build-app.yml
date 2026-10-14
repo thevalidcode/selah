@@ -145,6 +145,42 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Fetch ONNX Runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="1.19.2"
+          mkdir -p src-tauri/resources
+
+          case "${{ runner.os }}-${{ matrix.target }}" in
+            macOS-aarch64-apple-darwin)
+              URL="https://github.com/microsoft/onnxruntime/releases/download/v${VER}/onnxruntime-osx-arm64-${VER}.tgz"
+              curl -sSL "$URL" | tar -xz -C /tmp
+              SRC=$(find /tmp -type f -name 'libonnxruntime*.dylib' | head -1)
+              cp "$SRC" src-tauri/resources/libonnxruntime.dylib
+              ;;
+            macOS-x86_64-apple-darwin)
+              URL="https://github.com/microsoft/onnxruntime/releases/download/v${VER}/onnxruntime-osx-x86_64-${VER}.tgz"
+              curl -sSL "$URL" | tar -xz -C /tmp
+              SRC=$(find /tmp -type f -name 'libonnxruntime*.dylib' | head -1)
+              cp "$SRC" src-tauri/resources/libonnxruntime.dylib
+              ;;
+            Linux-*)
+              URL="https://github.com/microsoft/onnxruntime/releases/download/v${VER}/onnxruntime-linux-x64-${VER}.tgz"
+              curl -sSL "$URL" | tar -xz -C /tmp
+              SRC=$(find /tmp -type f -name 'libonnxruntime.so*' ! -name '*.a' | head -1)
+              cp "$SRC" src-tauri/resources/libonnxruntime.so
+              ;;
+            Windows-*)
+              URL="https://github.com/microsoft/onnxruntime/releases/download/v${VER}/onnxruntime-win-x64-${VER}.zip"
+              curl -sSL "$URL" -o /tmp/ort.zip
+              unzip -q /tmp/ort.zip -d /tmp/ort
+              SRC=$(find /tmp/ort -type f -name 'onnxruntime.dll' | head -1)
+              cp "$SRC" src-tauri/resources/onnxruntime.dll
+              ;;
+          esac
+          ls -la src-tauri/resources/
+
       - name: Build Tauri app (targeted)
         if: matrix.target != ''
         env:
