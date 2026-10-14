@@ -1,54 +1,73 @@
 # Installing Selah
 
-Pick your platform below. If you see a security warning when opening
-Selah, follow the "helper" step — it removes the warning permanently.
+Pick your platform below.
 
 ---
 
 ## macOS
 
-1. Download the right `.dmg`:
+1. Download the right `.dmg` for your Mac:
    - **Apple Silicon (M1/M2/M3):** `Selah-x.y.z-aarch64.dmg`
    - **Intel:** `Selah-x.y.z-x64.dmg`
 
-2. Open the `.dmg`, drag **Selah.app** into **Applications**.
+2. Open the `.dmg` and drag **Selah.app** into **Applications**.
 
-3. Download **`Fix-macOS.command`** from this release.
+3. macOS will block Selah the first time, because this release is not
+   yet code-signed. To allow it, run one command in Terminal:
+   - Press `Cmd + Space`, type `Terminal`, press Enter.
+   - Paste this and press Enter:
 
-4. **Right-click** `Fix-macOS.command` → **Open** → **Open** again.
-   (You only need to do this once — macOS blocks new scripts by default.)
-
-5. Terminal opens. It removes the block from Selah automatically.
-   Press any key to close.
-
-6. Open **Selah** from Applications. Done.
-
-> If macOS still says "Selah is damaged," open Terminal and run:
 > `sudo xattr -cr /Applications/Selah.app`
+
+- Type your Mac password when asked. **Nothing will appear as you
+  type — that is normal.** Press Enter again.
+
+4. Open **Selah** from Applications. It will launch normally.
+
+> **Why is this needed?**
+> Apple requires paid code signing ($99/year) for apps distributed
+> outside the App Store. Once we have that set up, this step will
+> disappear. Until then, the Terminal command above is the only
+> workaround.
+
+> **"Selah is damaged and can't be opened"** — same fix. The command
+> above removes the flag macOS added when you downloaded it.
 
 ---
 
 ## Windows
 
-1. Download **`Selah-Setup-x.y.z.exe`**.
+1. Download both files from this release:
 
-2. Run it. If SmartScreen appears, click **More info → Run anyway**.
+- **`Selah-Setup-x.y.z.exe`** (the installer)
+- **`Fix-Windows.bat`** (the helper)
 
-3. Install Selah normally.
+2. Put them in the **same folder** (e.g. your Downloads folder).
 
-4. Download **`Fix-Windows.bat`** from this release.
+3. **Right-click** `Fix-Windows.bat` → **Run**.
 
-5. **Right-click** `Fix-Windows.bat` → **Run**. It removes the
-   "downloaded from internet" flag from Selah's files.
+If a blue "Windows protected your PC" window appears, click
+**More info** → **Run anyway**. This happens once.
 
-6. Launch Selah from the Start menu. Done.
+4. The helper removes the "downloaded from the internet" flag from
+   the installer and launches it. Follow the installer prompts.
+
+5. Open **Selah** from your Start menu. Done.
+
+> **Why is this needed?**
+> Windows flags any installer downloaded from the internet. The
+> helper tells Windows the installer is safe, so you only see the
+> warning once instead of during both the download and the install.
 
 ---
 
 ## Linux
 
-1. **AppImage:** download `Selah-x.y.z.AppImage`, then:
-   ```bash
-   chmod +x Selah-*.AppImage
-   ./Selah-*.AppImage
-   ```
+No helper or extra steps needed — Linux does not quarantine binaries.
+
+**AppImage (any distro):**
+
+```bash
+chmod +x Selah-*.AppImage
+./Selah-*.AppImage
+```

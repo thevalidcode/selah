@@ -1,19 +1,33 @@
 @echo off
-echo Selah — Windows unblock helper
-echo ===============================
+setlocal
+echo Selah — Windows installer helper
+echo ================================
 echo.
 
-set "TARGET=%LOCALAPPDATA%\Selah"
+REM Locate the installer in the same folder as this script
+set "SCRIPT_DIR=%~dp0"
+set "INSTALLER="
 
-if not exist "%TARGET%" (
-    echo Selah is not installed yet.
-    echo Please run Selah-Setup.exe first, then run this again.
-    pause
-    exit /b 1
+for %%F in ("%SCRIPT_DIR%Selah-Setup-*.exe") do (
+    set "INSTALLER=%%F"
+    goto :found
 )
 
-echo Unblocking files in %TARGET% ...
-powershell -NoProfile -Command "Get-ChildItem -Path '%TARGET%' -Recurse -File | Unblock-File"
+echo Could not find Selah-Setup-*.exe in the same folder as this script.
+echo Please make sure both files are in the same folder.
+pause
+exit /b 1
 
-echo Done. You can now launch Selah normally.
+:found
+echo Found installer: %INSTALLER%
+echo.
+
+echo Removing the "downloaded from internet" flag...
+powershell -NoProfile -Command "Unblock-File -Path '%INSTALLER%'"
+
+echo Launching installer...
+"%INSTALLER%"
+
+echo.
+echo If installation succeeded, Selah will be in your Start menu.
 pause
