@@ -273,4 +273,10 @@ jobs:
             && gh release edit "$TAG" --title "Selah Desktop v${VERSION}" \
             || gh release create "$TAG" --title "Selah Desktop v${VERSION}" --generate-notes --target "$GITHUB_SHA"
 
+          gh release upload "$TAG" \
+              packaging/helpers/Fix-Windows.bat \
+              packaging/helpers/Fix-macOS.command \
+              INSTALL.md \
+              --clobber
+
           gh release upload "$TAG" "${assets[@]}" --clobber
