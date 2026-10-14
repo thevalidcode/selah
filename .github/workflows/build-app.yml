@@ -65,7 +65,7 @@ jobs:
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
           else
-            VERSION=$(node -e "console.log(require('./selah/package.json').version)")
+            VERSION=$(node -p "require('./package.json').version")
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Detected version: $VERSION"
