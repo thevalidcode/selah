@@ -1,6 +1,6 @@
 [package]
 name = "selah"
-version = "0.1.0"
+version = "0.1.1"
 description = "Selah — offline-first church service presentation application"
 authors = ["Selah"]
 edition = "2021"
