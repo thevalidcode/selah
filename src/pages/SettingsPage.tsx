@@ -9,7 +9,6 @@ import {
   RotateCcw,
   Save,
   Sparkles,
-  Upload,
 } from "lucide-react";
 
 import PageHeader, {
